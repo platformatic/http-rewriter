@@ -1,0 +1,11 @@
+# OS specific files
+.DS_Store
+
+# Development environment files
+/.claude
+
+#Lock files
+/Cargo.lock
+
+# Build/Install files
+/target
