@@ -3,7 +3,7 @@ use std::ops::Deref;
 use ::napi::{Error, Result, Status};
 use napi_derive::napi;
 
-pub use http_handler::napi::NapiRequest;
+use http_handler::napi::NapiRequest;
 
 //
 // Conditions
