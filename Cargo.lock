@@ -89,7 +89,7 @@ dependencies = [
 [[package]]
 name = "http-handler"
 version = "1.0.0"
-source = "git+ssh://git@github.com/platformatic/http-handler#adee4618ab934ac2258f540d2e739fa857f1d359"
+source = "git+ssh://git@github.com/platformatic/http-handler#986fe537137496800699a9883f0dc7b7a44b9821"
 dependencies = [
  "bytes",
  "http",
@@ -135,9 +135,9 @@ checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 
 [[package]]
 name = "napi"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3e421d66dd6c5199d9495d7690546200e6aca700bd24fe4b8106ffde6b003b5"
+checksum = "e8a8bf588b2ea96bdf618cac8a81b2b6cb5e0f0f86a1ac4ac62859ab78fd79a8"
 dependencies = [
  "bitflags",
  "ctor",
@@ -155,9 +155,9 @@ checksum = "44e0e3177307063d3e7e55b7dd7b648cca9d7f46daa35422c0d98cc2bf48c2c1"
 
 [[package]]
 name = "napi-derive"
-version = "3.0.0-beta.9"
+version = "3.0.0-beta.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd02a8ea3974a47a795a239f8831e5186c265c8624a4e56d538836c47305b312"
+checksum = "0cf56acb0b78c92cba806a559cfe62513f53cc4a7947807e2ff3c4ef865e9b3a"
 dependencies = [
  "convert_case",
  "ctor",
@@ -169,9 +169,9 @@ dependencies = [
 
 [[package]]
 name = "napi-derive-backend"
-version = "2.0.0-beta.9"
+version = "2.0.0-beta.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd0ddff83363d45cfd7af07bf00916ac2c42159e8b79a31874456446aef1a689"
+checksum = "6862700f1bdfe43767dc2fd3577306cf6342431f078b765c8336454dda382f1d"
 dependencies = [
  "convert_case",
  "proc-macro2",

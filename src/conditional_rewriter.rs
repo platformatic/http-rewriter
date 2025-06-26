@@ -7,13 +7,13 @@
 //! # Examples
 //!
 //! ```
-//! use http_rewriter::{ConditionalRewriter, PathRewriter, PathCondition, Rewriter};
+//! use http_rewriter::{PathRewriter, PathCondition, Rewriter, RewriterExt};
 //! use http::Request;
 //!
 //! // Only rewrite API paths
 //! let condition = PathCondition::new("^/api/.*").unwrap();
 //! let rewriter = PathRewriter::new("^/api/v1/", "/api/v2/").unwrap();
-//! let conditional = ConditionalRewriter::new(rewriter, condition);
+//! let conditional = rewriter.when(condition);
 //!
 //! // This matches the condition and gets rewritten
 //! let request = Request::builder()
@@ -56,8 +56,7 @@ use http::Request;
 ///
 /// ```
 /// use http_rewriter::{
-///     ConditionalRewriter, PathRewriter, MethodCondition,
-///     HeaderRewriter, Rewriter, ConditionExt
+///     PathRewriter, MethodCondition, HeaderRewriter, Rewriter, ConditionExt, RewriterExt
 /// };
 /// use http::{Request, Method};
 ///
@@ -65,7 +64,7 @@ use http::Request;
 /// let rewriter = PathRewriter::new("^/form/", "/submit/").unwrap();
 /// let condition = MethodCondition::new(Method::POST)
 ///     .expect("Method::POST is always valid");
-/// let conditional = ConditionalRewriter::new(rewriter, condition);
+/// let conditional = rewriter.when(condition);
 ///
 /// // POST request gets rewritten
 /// let request = Request::builder()
@@ -88,8 +87,7 @@ use http::Request;
 ///
 /// ```
 /// use http_rewriter::{
-///     ConditionalRewriter, HeaderRewriter, HeaderCondition,
-///     PathCondition, Rewriter, ConditionExt
+///     HeaderRewriter, HeaderCondition, PathCondition, Rewriter, ConditionExt, RewriterExt
 /// };
 /// use http::Request;
 ///
@@ -100,7 +98,7 @@ use http::Request;
 ///
 /// // Add API version header only for matching requests
 /// let rewriter = HeaderRewriter::new("X-API-Version", ".*", "2.0").unwrap();
-/// let conditional = ConditionalRewriter::new(rewriter, combined);
+/// let conditional = rewriter.when(combined);
 ///
 /// // Matching request gets the header added
 /// let request = Request::builder()
@@ -127,14 +125,14 @@ impl<R: Rewriter, C: Condition> ConditionalRewriter<R, C> {
     ///
     /// ```
     /// use http_rewriter::{
-    ///     ConditionalRewriter, PathRewriter, MethodCondition
+    ///     ConditionalRewriter, PathRewriter, MethodCondition, RewriterExt
     /// };
     /// use http::Method;
     ///
     /// let rewriter = PathRewriter::new("/old/", "/new/").unwrap();
     /// let condition = MethodCondition::new(Method::POST)
     ///     .expect("Method::POST is always valid");
-    /// let conditional = ConditionalRewriter::new(rewriter, condition);
+    /// let conditional = rewriter.when(condition);
     /// ```
     pub fn new(rewriter: Box<R>, condition: Box<C>) -> Self {
         Self(rewriter, condition)
