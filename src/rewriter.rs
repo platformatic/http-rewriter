@@ -547,13 +547,12 @@ impl Rewriter for HrefRewriter {
 /// # Examples
 ///
 /// ```
-/// use http_rewriter::{Rewriter, SequenceRewriter, PathRewriter, MethodRewriter};
+/// use http_rewriter::{Rewriter, SequenceRewriter, PathRewriter, MethodRewriter, RewriterExt};
 /// use http::{Request, Method};
 ///
 /// // Create a sequence manually
-/// let path_rewriter = PathRewriter::new("^/old/", "/new/").unwrap();
-/// let method_rewriter = MethodRewriter::new(Method::POST).unwrap();
-/// let sequence = SequenceRewriter::new(path_rewriter, method_rewriter);
+/// let sequence = PathRewriter::new("^/old/", "/new/").unwrap()
+///     .then(MethodRewriter::new(Method::POST).unwrap());
 ///
 /// let request = Request::builder()
 ///     .method(Method::GET)
@@ -597,12 +596,13 @@ impl<R1: Rewriter, R2: Rewriter> SequenceRewriter<R1, R2> {
     /// # Examples
     ///
     /// ```
+    /// use std::boxed::Box;
     /// use http_rewriter::{SequenceRewriter, PathRewriter, MethodRewriter};
     /// use http::Method;
     ///
     /// let sequence = SequenceRewriter::new(
-    ///     PathRewriter::new("/old/", "/new/").unwrap(),
-    ///     MethodRewriter::new(Method::POST).unwrap()
+    ///     Box::new(PathRewriter::new("/old/", "/new/").unwrap()),
+    ///     Box::new(MethodRewriter::new(Method::POST).unwrap())
     /// );
     /// ```
     pub fn new(first: Box<R1>, second: Box<R2>) -> Self {

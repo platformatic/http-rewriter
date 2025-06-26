@@ -4,7 +4,7 @@ use ::napi::bindgen_prelude::{Either5, Either6};
 use ::napi::{Error, Result, Status};
 use napi_derive::napi;
 
-use http_handler::napi::NapiRequest;
+use http_handler::napi::Request;
 
 //
 // Conditions
@@ -42,7 +42,7 @@ impl PathCondition {
     /// const matches = condition.matches(request);
     /// ```
     #[napi]
-    pub fn matches(&self, request: NapiRequest) -> Result<bool> {
+    pub fn matches(&self, request: Request) -> Result<bool> {
         Ok(self.0.matches(request.deref()))
     }
 }
@@ -77,7 +77,7 @@ impl HeaderCondition {
     /// const matches = condition.matches(request);
     /// ```
     #[napi]
-    pub fn matches(&self, request: NapiRequest) -> Result<bool> {
+    pub fn matches(&self, request: Request) -> Result<bool> {
         Ok(self.0.matches(request.deref()))
     }
 }
@@ -112,7 +112,7 @@ impl MethodCondition {
     /// const matches = condition.matches(request);
     /// ```
     #[napi]
-    pub fn matches(&self, request: NapiRequest) -> Result<bool> {
+    pub fn matches(&self, request: Request) -> Result<bool> {
         Ok(self.0.matches(request.deref()))
     }
 }
@@ -144,7 +144,7 @@ impl ExistenceCondition {
     /// const matches = condition.matches(request);
     /// ```
     #[napi]
-    pub fn matches(&self, request: &NapiRequest) -> Result<bool> {
+    pub fn matches(&self, request: &Request) -> Result<bool> {
         Ok(self.0.matches(request))
     }
 }
@@ -176,7 +176,7 @@ impl NonExistenceCondition {
     /// const matches = condition.matches(request);
     /// ```
     #[napi]
-    pub fn matches(&self, request: &NapiRequest) -> Result<bool> {
+    pub fn matches(&self, request: &Request) -> Result<bool> {
         Ok(self.0.matches(request))
     }
 }
@@ -449,7 +449,7 @@ impl GroupCondition {
     /// const matches = condition.matches(request);
     /// ```
     #[napi]
-    pub fn matches(&self, request: NapiRequest) -> Result<bool> {
+    pub fn matches(&self, request: Request) -> Result<bool> {
         Ok(self.0.matches(request.deref()))
     }
 }
@@ -554,7 +554,7 @@ impl PathRewriter {
     /// const rewritten = rewriter.rewrite('/path/to/resource');
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: NapiRequest) -> Result<NapiRequest> {
+    pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
             .rewrite(request.deref().to_owned())
@@ -594,7 +594,7 @@ impl HeaderRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: NapiRequest) -> Result<NapiRequest> {
+    pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
             .rewrite(request.deref().to_owned())
@@ -634,7 +634,7 @@ impl MethodRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: NapiRequest) -> Result<NapiRequest> {
+    pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
             .rewrite(request.deref().to_owned())
@@ -832,7 +832,7 @@ impl SequenceRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: NapiRequest) -> Result<NapiRequest> {
+    pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
             .rewrite(request.deref().to_owned())
@@ -1080,7 +1080,7 @@ impl ConditionalRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: NapiRequest) -> Result<NapiRequest> {
+    pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
             .rewrite(request.deref().to_owned())
