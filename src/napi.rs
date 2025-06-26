@@ -807,17 +807,6 @@ impl_from_sequence_rewriter!(
     Conditional_Conditional
 );
 
-// Implementation of Rewriter for Box<SequenceRewriterType>
-// TODO: Should SequenceRewriter just contain boxed values so we don't need this?
-impl Rewriter for Box<SequenceRewriterType> {
-    fn rewrite<B>(
-        &self,
-        request: http::Request<B>,
-    ) -> std::result::Result<http::Request<B>, crate::RewriteError> {
-        (**self).rewrite(request)
-    }
-}
-
 /// A N-API wrapper for the `SequenceRewriter` type.
 #[napi]
 pub struct SequenceRewriter(SequenceRewriterType);
@@ -1054,17 +1043,6 @@ impl_from_conditional_rewriter!(
     GroupConditionType,
     Conditional_Group
 );
-
-// Implementation of Rewriter for Box<SequenceRewriterType>
-// TODO: Should SequenceRewriter just contain boxed values so we don't need this?
-impl Rewriter for Box<ConditionalRewriterType> {
-    fn rewrite<B>(
-        &self,
-        request: http::Request<B>,
-    ) -> std::result::Result<http::Request<B>, crate::RewriteError> {
-        (**self).rewrite(request)
-    }
-}
 
 /// A N-API wrapper for the `ConditionalRewriter` type.
 #[napi]
