@@ -47,6 +47,8 @@
 //! assert_eq!(result.method(), Method::POST);
 //! ```
 
+use std::fmt::{Debug, Formatter, Result as FmtResult};
+
 use super::{Condition, ConditionalRewriter};
 use http::{Method, Request};
 use regex::Regex;
@@ -582,10 +584,7 @@ impl Rewriter for HrefRewriter {
 /// assert_eq!(result.uri().path(), "/api/v2/users");
 /// assert_eq!(result.headers().get("x-api-version").unwrap(), "2.0");
 /// ```
-pub struct SequenceRewriter<R1, R2> {
-    first: R1,
-    second: R2,
-}
+pub struct SequenceRewriter<R1, R2>(R1, R2);
 
 impl<R1: Rewriter, R2: Rewriter> SequenceRewriter<R1, R2> {
     /// Create a new sequence rewriter that applies two rewriters in order
@@ -607,14 +606,36 @@ impl<R1: Rewriter, R2: Rewriter> SequenceRewriter<R1, R2> {
     /// );
     /// ```
     pub fn new(first: R1, second: R2) -> Self {
-        Self { first, second }
+        Self(first, second)
     }
 }
 
 impl<R1: Rewriter, R2: Rewriter> Rewriter for SequenceRewriter<R1, R2> {
     fn rewrite<B>(&self, request: Request<B>) -> Result<Request<B>, RewriteError> {
-        let request = self.first.rewrite(request)?;
-        self.second.rewrite(request)
+        self.1.rewrite(self.0.rewrite(request)?)
+    }
+}
+
+impl<R1, R2> Clone for SequenceRewriter<R1, R2>
+where
+    R1: Clone,
+    R2: Clone,
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
+
+impl<R1, R2> Debug for SequenceRewriter<R1, R2>
+where
+    R1: Debug,
+    R2: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_struct("SequenceRewriter")
+            .field("0", &self.0)
+            .field("1", &self.1)
+            .finish()
     }
 }
 
