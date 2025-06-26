@@ -33,6 +33,8 @@
 //! assert!(combined.matches(&request));
 //! ```
 
+use std::fmt::{Debug, Formatter, Result as FmtResult};
+
 use http::Request;
 use http_handler::RequestExt;
 use regex::Regex;
@@ -594,6 +596,42 @@ where
         match self {
             GroupCondition::And(a, b) => a.matches(request) && b.matches(request),
             GroupCondition::Or(a, b) => a.matches(request) || b.matches(request),
+        }
+    }
+}
+
+// If conditions A and B implement Clone, GroupCondition should also
+impl<A, B> Clone for GroupCondition<A, B>
+where
+    A: Condition + Clone,
+    B: Condition + Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            GroupCondition::And(a, b) => GroupCondition::And(a.clone(), b.clone()),
+            GroupCondition::Or(a, b) => GroupCondition::Or(a.clone(), b.clone()),
+        }
+    }
+}
+
+// If conditions A and B implement Debug, GroupCondition should also
+impl<A, B> Debug for GroupCondition<A, B>
+where
+    A: Condition + Debug,
+    B: Condition + Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            GroupCondition::And(a, b) => f
+                .debug_tuple("GroupCondition::And")
+                .field(a)
+                .field(b)
+                .finish(),
+            GroupCondition::Or(a, b) => f
+                .debug_tuple("GroupCondition::Or")
+                .field(a)
+                .field(b)
+                .finish(),
         }
     }
 }
