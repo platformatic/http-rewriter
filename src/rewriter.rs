@@ -584,7 +584,7 @@ impl Rewriter for HrefRewriter {
 /// assert_eq!(result.uri().path(), "/api/v2/users");
 /// assert_eq!(result.headers().get("x-api-version").unwrap(), "2.0");
 /// ```
-pub struct SequenceRewriter<R1, R2>(R1, R2);
+pub struct SequenceRewriter<R1, R2>(Box<R1>, Box<R2>);
 
 impl<R1: Rewriter, R2: Rewriter> SequenceRewriter<R1, R2> {
     /// Create a new sequence rewriter that applies two rewriters in order
@@ -605,7 +605,7 @@ impl<R1: Rewriter, R2: Rewriter> SequenceRewriter<R1, R2> {
     ///     MethodRewriter::new(Method::POST).unwrap()
     /// );
     /// ```
-    pub fn new(first: R1, second: R2) -> Self {
+    pub fn new(first: Box<R1>, second: Box<R2>) -> Self {
         Self(first, second)
     }
 }
@@ -806,7 +806,7 @@ pub trait RewriterExt: Rewriter + Sized {
     ///     .then(MethodRewriter::new(Method::POST).unwrap());
     /// ```
     fn then<R: Rewriter>(self, other: R) -> SequenceRewriter<Self, R> {
-        SequenceRewriter::new(self, other)
+        SequenceRewriter::new(Box::new(self), Box::new(other))
     }
 
     /// Apply this rewriter conditionally based on a condition
@@ -831,11 +831,9 @@ pub trait RewriterExt: Rewriter + Sized {
     ///     .when(MethodCondition::new(Method::POST)
     ///         .expect("Method::POST is always valid"));
     /// ```
-    fn when<C: Condition>(self, condition: C) -> ConditionalRewriter<Self, C>;
-}
-
-impl<T: Rewriter> RewriterExt for T {
     fn when<C: Condition>(self, condition: C) -> ConditionalRewriter<Self, C> {
-        ConditionalRewriter::new(self, condition)
+        ConditionalRewriter::new(Box::new(self), Box::new(condition))
     }
 }
+
+impl<T: Rewriter> RewriterExt for T {}

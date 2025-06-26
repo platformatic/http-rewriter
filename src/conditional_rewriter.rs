@@ -112,10 +112,8 @@ use http::Request;
 /// let result = conditional.rewrite(request).unwrap();
 /// assert_eq!(result.headers().get("x-api-version").unwrap(), "2.0");
 /// ```
-pub struct ConditionalRewriter<R, C> {
-    rewriter: R,
-    condition: C,
-}
+#[derive(Clone, Debug)]
+pub struct ConditionalRewriter<R, C>(Box<R>, Box<C>);
 
 impl<R: Rewriter, C: Condition> ConditionalRewriter<R, C> {
     /// Create a new conditional rewriter
@@ -138,18 +136,15 @@ impl<R: Rewriter, C: Condition> ConditionalRewriter<R, C> {
     ///     .expect("Method::POST is always valid");
     /// let conditional = ConditionalRewriter::new(rewriter, condition);
     /// ```
-    pub fn new(rewriter: R, condition: C) -> Self {
-        Self {
-            rewriter,
-            condition,
-        }
+    pub fn new(rewriter: Box<R>, condition: Box<C>) -> Self {
+        Self(rewriter, condition)
     }
 }
 
 impl<R: Rewriter, C: Condition> Rewriter for ConditionalRewriter<R, C> {
     fn rewrite<B>(&self, request: Request<B>) -> Result<Request<B>, RewriteError> {
-        if self.condition.matches(&request) {
-            self.rewriter.rewrite(request)
+        if self.1.matches(&request) {
+            self.0.rewrite(request)
         } else {
             Ok(request)
         }
