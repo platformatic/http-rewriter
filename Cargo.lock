@@ -89,7 +89,7 @@ dependencies = [
 [[package]]
 name = "http-handler"
 version = "1.0.0"
-source = "git+ssh://git@github.com/platformatic/http-handler#986fe537137496800699a9883f0dc7b7a44b9821"
+source = "git+ssh://git@github.com/platformatic/http-handler#ff7cceb0783e9e835ac7782aa64cf38ace97647a"
 dependencies = [
  "bytes",
  "http",

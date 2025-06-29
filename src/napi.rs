@@ -7,10 +7,10 @@ use napi_derive::napi;
 use http_handler::napi::Request;
 
 //
-// Conditions
+// Basic Conditions
 //
 
-use crate::{Condition, ConditionExt};
+use crate::{Condition as ConditionTrait, ConditionExt};
 
 /// A N-API wrapper for the `PathCondition` type.
 #[napi]
@@ -181,6 +181,12 @@ impl NonExistenceCondition {
     }
 }
 
+//
+// Complex Conditions
+//
+
+// Since Condition traits have generic methods, we need to create a type-erased
+// wrapper that can be used with GroupCondition
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug)]
 enum GroupConditionType {
@@ -238,7 +244,7 @@ enum GroupConditionType {
     Group_Group(crate::GroupCondition<GroupConditionType, GroupConditionType>),
 }
 
-impl Condition for GroupConditionType {
+impl crate::Condition for GroupConditionType {
     fn matches<B>(&self, request: &http::Request<B>) -> bool {
         match self {
             GroupConditionType::Path_Path(c) => c.matches(request),
@@ -281,6 +287,7 @@ impl Condition for GroupConditionType {
     }
 }
 
+// Implement `From` for each combination of GroupCondition
 macro_rules! impl_from_group_condition {
     ($a:ty, $b:ty, $name:ident) => {
         impl From<crate::GroupCondition<$a, $b>> for GroupConditionType {
@@ -289,9 +296,46 @@ macro_rules! impl_from_group_condition {
             }
         }
 
-        impl From<Box<crate::GroupCondition<$a, $b>>> for GroupConditionType {
-            fn from(condition: Box<crate::GroupCondition<$a, $b>>) -> Self {
-                GroupConditionType::$name(*condition)
+        impl TryFrom<GroupConditionType> for crate::GroupCondition<$a, $b> {
+            type Error = Error;
+
+            fn try_from(value: GroupConditionType) -> Result<Self> {
+                match value {
+                    GroupConditionType::$name(c) => Ok(c),
+                    _ => Err(Error::new(
+                        Status::InvalidArg,
+                        format!(
+                            "Expected GroupConditionType::{}, found {:?}",
+                            stringify!($name),
+                            value
+                        ),
+                    )),
+                }
+            }
+        }
+
+        impl From<crate::GroupCondition<$a, $b>> for Condition {
+            fn from(condition: crate::GroupCondition<$a, $b>) -> Self {
+                Condition(Either6::F(condition.into()))
+            }
+        }
+
+        impl TryFrom<Condition> for crate::GroupCondition<$a, $b> {
+            type Error = Error;
+
+            fn try_from(value: Condition) -> Result<Self> {
+                match value.0 {
+                    Either6::F(c) => c.try_into(),
+                    _ => Err(Error::new(
+                        Status::InvalidArg,
+                        format!(
+                            "Expected crate::GroupCondition<{}, {}>, found {:?}",
+                            stringify!($a),
+                            stringify!($b),
+                            value
+                        ),
+                    )),
+                }
             }
         }
     };
@@ -454,7 +498,7 @@ impl GroupCondition {
     }
 }
 
-/// Type alias for any condition type that can be passed to and/or methods
+// Type alias for any condition which can be passed to `and`/`or` methods in JS
 type AnyCondition<'a> = Either6<
     &'a PathCondition,
     &'a HeaderCondition,
@@ -464,6 +508,52 @@ type AnyCondition<'a> = Either6<
     &'a GroupCondition,
 >;
 
+// Type alias for any condition which can be passed to `and`/`or` methods in Rust
+type AnyConditionOwned = Either6<
+    crate::PathCondition,
+    crate::HeaderCondition,
+    crate::MethodCondition,
+    crate::ExistenceCondition,
+    crate::NonExistenceCondition,
+    GroupConditionType,
+>;
+
+macro_rules! impl_from_condition {
+    ($type:ty, $name:ident) => {
+        impl From<$type> for Condition {
+            fn from(condition: $type) -> Self {
+                Condition(Either6::$name(condition))
+            }
+        }
+
+        impl TryFrom<Condition> for $type {
+            type Error = Error;
+
+            fn try_from(value: Condition) -> Result<Self> {
+                match value.0 {
+                    Either6::$name(c) => Ok(c),
+                    _ => Err(Error::new(
+                        Status::InvalidArg,
+                        format!("Expected Either6::{}, found {:?}", stringify!($name), value),
+                    )),
+                }
+            }
+        }
+    };
+}
+
+impl_from_condition!(crate::PathCondition, A);
+impl_from_condition!(crate::HeaderCondition, B);
+impl_from_condition!(crate::MethodCondition, C);
+impl_from_condition!(crate::ExistenceCondition, D);
+impl_from_condition!(crate::NonExistenceCondition, E);
+impl_from_condition!(GroupConditionType, F);
+
+// Implement combinators for all condition types
+//
+// Provides:
+// - `and` method to combine conditions with logical AND
+// - `or` method to combine conditions with logical OR
 macro_rules! impl_condition_combinators {
     ($type:ty) => {
         #[napi]
@@ -518,11 +608,160 @@ impl_condition_combinators!(ExistenceCondition);
 impl_condition_combinators!(NonExistenceCondition);
 impl_condition_combinators!(GroupCondition);
 
+/// Allows constructing rewriter and condition configurations from JSON.
+#[derive(Clone, Debug)]
+pub struct Condition(AnyConditionOwned);
+
+impl crate::Condition for Condition {
+    fn matches<B>(&self, request: &http::Request<B>) -> bool {
+        match &self.0 {
+            Either6::A(c) => c.matches(request),
+            Either6::B(c) => c.matches(request),
+            Either6::C(c) => c.matches(request),
+            Either6::D(c) => c.matches(request),
+            Either6::E(c) => c.matches(request),
+            Either6::F(c) => c.matches(request),
+        }
+    }
+}
+
+impl TryFrom<ConditionConfig> for Condition {
+    type Error = Error;
+
+    fn try_from(config: ConditionConfig) -> Result<Self> {
+        match config.condition {
+            ConditionType::Path => {
+                let path_condition = crate::PathCondition::try_from(config)
+                    .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+                Ok(path_condition.into())
+            }
+            ConditionType::Header => {
+                let header_condition = crate::HeaderCondition::try_from(config)
+                    .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+                Ok(header_condition.into())
+            }
+            ConditionType::Method => {
+                let method_condition = crate::MethodCondition::try_from(config)
+                    .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+                Ok(method_condition.into())
+            }
+            ConditionType::Exists => {
+                let existence_condition = crate::ExistenceCondition::new();
+                Ok(existence_condition.into())
+            }
+            ConditionType::NotExists => {
+                let nonexistence_condition = crate::NonExistenceCondition::new();
+                Ok(nonexistence_condition.into())
+            }
+        }
+    }
+}
+
+fn and<A, B>(a: A, b: B) -> Condition
+where
+    A: Into<Condition>,
+    B: Into<Condition>,
+{
+    match (a.into().0, b.into().0) {
+        (Either6::A(a), Either6::A(b)) => a.and(b).into(),
+        (Either6::A(a), Either6::B(b)) => a.and(b).into(),
+        (Either6::A(a), Either6::C(b)) => a.and(b).into(),
+        (Either6::A(a), Either6::D(b)) => a.and(b).into(),
+        (Either6::A(a), Either6::E(b)) => a.and(b).into(),
+        (Either6::A(a), Either6::F(b)) => a.and(b).into(),
+
+        (Either6::B(a), Either6::A(b)) => a.and(b).into(),
+        (Either6::B(a), Either6::B(b)) => a.and(b).into(),
+        (Either6::B(a), Either6::C(b)) => a.and(b).into(),
+        (Either6::B(a), Either6::D(b)) => a.and(b).into(),
+        (Either6::B(a), Either6::E(b)) => a.and(b).into(),
+        (Either6::B(a), Either6::F(b)) => a.and(b).into(),
+
+        (Either6::C(a), Either6::A(b)) => a.and(b).into(),
+        (Either6::C(a), Either6::B(b)) => a.and(b).into(),
+        (Either6::C(a), Either6::C(b)) => a.and(b).into(),
+        (Either6::C(a), Either6::D(b)) => a.and(b).into(),
+        (Either6::C(a), Either6::E(b)) => a.and(b).into(),
+        (Either6::C(a), Either6::F(b)) => a.and(b).into(),
+
+        (Either6::D(a), Either6::A(b)) => a.and(b).into(),
+        (Either6::D(a), Either6::B(b)) => a.and(b).into(),
+        (Either6::D(a), Either6::C(b)) => a.and(b).into(),
+        (Either6::D(a), Either6::D(b)) => a.and(b).into(),
+        (Either6::D(a), Either6::E(b)) => a.and(b).into(),
+        (Either6::D(a), Either6::F(b)) => a.and(b).into(),
+
+        (Either6::E(a), Either6::A(b)) => a.and(b).into(),
+        (Either6::E(a), Either6::B(b)) => a.and(b).into(),
+        (Either6::E(a), Either6::C(b)) => a.and(b).into(),
+        (Either6::E(a), Either6::D(b)) => a.and(b).into(),
+        (Either6::E(a), Either6::E(b)) => a.and(b).into(),
+        (Either6::E(a), Either6::F(b)) => a.and(b).into(),
+
+        (Either6::F(a), Either6::A(b)) => a.and(b).into(),
+        (Either6::F(a), Either6::B(b)) => a.and(b).into(),
+        (Either6::F(a), Either6::C(b)) => a.and(b).into(),
+        (Either6::F(a), Either6::D(b)) => a.and(b).into(),
+        (Either6::F(a), Either6::E(b)) => a.and(b).into(),
+        (Either6::F(a), Either6::F(b)) => a.and(b).into(),
+    }
+}
+
+fn or<A, B>(a: A, b: B) -> Condition
+where
+    A: Into<Condition>,
+    B: Into<Condition>,
+{
+    match (a.into().0, b.into().0) {
+        (Either6::A(a), Either6::A(b)) => a.or(b).into(),
+        (Either6::A(a), Either6::B(b)) => a.or(b).into(),
+        (Either6::A(a), Either6::C(b)) => a.or(b).into(),
+        (Either6::A(a), Either6::D(b)) => a.or(b).into(),
+        (Either6::A(a), Either6::E(b)) => a.or(b).into(),
+        (Either6::A(a), Either6::F(b)) => a.or(b).into(),
+
+        (Either6::B(a), Either6::A(b)) => a.or(b).into(),
+        (Either6::B(a), Either6::B(b)) => a.or(b).into(),
+        (Either6::B(a), Either6::C(b)) => a.or(b).into(),
+        (Either6::B(a), Either6::D(b)) => a.or(b).into(),
+        (Either6::B(a), Either6::E(b)) => a.or(b).into(),
+        (Either6::B(a), Either6::F(b)) => a.or(b).into(),
+
+        (Either6::C(a), Either6::A(b)) => a.or(b).into(),
+        (Either6::C(a), Either6::B(b)) => a.or(b).into(),
+        (Either6::C(a), Either6::C(b)) => a.or(b).into(),
+        (Either6::C(a), Either6::D(b)) => a.or(b).into(),
+        (Either6::C(a), Either6::E(b)) => a.or(b).into(),
+        (Either6::C(a), Either6::F(b)) => a.or(b).into(),
+
+        (Either6::D(a), Either6::A(b)) => a.or(b).into(),
+        (Either6::D(a), Either6::B(b)) => a.or(b).into(),
+        (Either6::D(a), Either6::C(b)) => a.or(b).into(),
+        (Either6::D(a), Either6::D(b)) => a.or(b).into(),
+        (Either6::D(a), Either6::E(b)) => a.or(b).into(),
+        (Either6::D(a), Either6::F(b)) => a.or(b).into(),
+
+        (Either6::E(a), Either6::A(b)) => a.or(b).into(),
+        (Either6::E(a), Either6::B(b)) => a.or(b).into(),
+        (Either6::E(a), Either6::C(b)) => a.or(b).into(),
+        (Either6::E(a), Either6::D(b)) => a.or(b).into(),
+        (Either6::E(a), Either6::E(b)) => a.or(b).into(),
+        (Either6::E(a), Either6::F(b)) => a.or(b).into(),
+
+        (Either6::F(a), Either6::A(b)) => a.or(b).into(),
+        (Either6::F(a), Either6::B(b)) => a.or(b).into(),
+        (Either6::F(a), Either6::C(b)) => a.or(b).into(),
+        (Either6::F(a), Either6::D(b)) => a.or(b).into(),
+        (Either6::F(a), Either6::E(b)) => a.or(b).into(),
+        (Either6::F(a), Either6::F(b)) => a.or(b).into(),
+    }
+}
+
 //
 // Rewriters
 //
 
-use crate::{Rewriter, RewriterExt};
+use crate::{Rewriter as RewriterTrait, RewriterExt};
 
 /// A N-API wrapper for the `PathRewriter` type.
 #[napi]
@@ -644,8 +883,10 @@ impl MethodRewriter {
     }
 }
 
+// Since Rewriter traits have generic methods, we need to create a type-erased
+// wrapper that can be used with SequenceRewriter
 #[allow(non_camel_case_types)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum SequenceRewriterType {
     Path_Path(crate::SequenceRewriter<crate::PathRewriter, crate::PathRewriter>),
     Path_Header(crate::SequenceRewriter<crate::PathRewriter, crate::HeaderRewriter>),
@@ -682,7 +923,7 @@ enum SequenceRewriterType {
     ),
 }
 
-impl Rewriter for SequenceRewriterType {
+impl crate::Rewriter for SequenceRewriterType {
     fn rewrite<B>(
         &self,
         request: http::Request<B>,
@@ -721,6 +962,7 @@ impl Rewriter for SequenceRewriterType {
     }
 }
 
+// Implement `From` for each combination of SequenceRewriter
 macro_rules! impl_from_sequence_rewriter {
     ($a:ty, $b:ty, $name:ident) => {
         impl From<crate::SequenceRewriter<$a, $b>> for SequenceRewriterType {
@@ -729,9 +971,9 @@ macro_rules! impl_from_sequence_rewriter {
             }
         }
 
-        impl From<Box<crate::SequenceRewriter<$a, $b>>> for SequenceRewriterType {
-            fn from(rewriter: Box<crate::SequenceRewriter<$a, $b>>) -> Self {
-                SequenceRewriterType::$name(*rewriter)
+        impl From<crate::SequenceRewriter<$a, $b>> for Rewriter {
+            fn from(rewriter: crate::SequenceRewriter<$a, $b>) -> Self {
+                Rewriter(Either5::D(rewriter.into()))
             }
         }
     };
@@ -831,19 +1073,10 @@ impl SequenceRewriter {
     }
 }
 
-/// Type alias for any rewriter type that can be passed to then/when methods
-type AnyRewriter<'a> = ::napi::bindgen_prelude::Either5<
-    &'a PathRewriter,
-    &'a HeaderRewriter,
-    &'a MethodRewriter,
-    &'a SequenceRewriter,
-    &'a ConditionalRewriter,
->;
-
 // Since Rewriter and Condition traits have generic methods, we need to create
 // a type-erased wrapper that can be used with ConditionalRewriter
 #[allow(non_camel_case_types)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ConditionalRewriterType {
     Path_Path(crate::ConditionalRewriter<crate::PathRewriter, crate::PathCondition>),
     Path_Header(crate::ConditionalRewriter<crate::PathRewriter, crate::HeaderCondition>),
@@ -889,7 +1122,7 @@ enum ConditionalRewriterType {
     Conditional_Group(crate::ConditionalRewriter<ConditionalRewriterType, GroupConditionType>),
 }
 
-impl Rewriter for ConditionalRewriterType {
+impl crate::Rewriter for ConditionalRewriterType {
     fn rewrite<B>(
         &self,
         request: http::Request<B>,
@@ -929,6 +1162,7 @@ impl Rewriter for ConditionalRewriterType {
     }
 }
 
+// Implement `From` for each combination of ConditionalRewriter
 macro_rules! impl_from_conditional_rewriter {
     ($a:ty, $b:ty, $name:ident) => {
         impl From<crate::ConditionalRewriter<$a, $b>> for ConditionalRewriterType {
@@ -937,9 +1171,9 @@ macro_rules! impl_from_conditional_rewriter {
             }
         }
 
-        impl From<Box<crate::ConditionalRewriter<$a, $b>>> for ConditionalRewriterType {
-            fn from(rewriter: Box<crate::ConditionalRewriter<$a, $b>>) -> Self {
-                ConditionalRewriterType::$name(*rewriter)
+        impl From<crate::ConditionalRewriter<$a, $b>> for Rewriter {
+            fn from(rewriter: crate::ConditionalRewriter<$a, $b>) -> Self {
+                Rewriter(Either5::E(rewriter.into()))
             }
         }
     };
@@ -1068,6 +1302,45 @@ impl ConditionalRewriter {
     }
 }
 
+/// Type alias for any rewriter which can be passed to `then`/`when` methods in JS
+type AnyRewriter<'a> = Either5<
+    &'a PathRewriter,
+    &'a HeaderRewriter,
+    &'a MethodRewriter,
+    &'a SequenceRewriter,
+    &'a ConditionalRewriter,
+>;
+
+// Type alias for any rewriter which can be passed to `then`/`when` methods in Rust
+type AnyRewriterOwned = Either5<
+    crate::PathRewriter,
+    crate::HeaderRewriter,
+    crate::MethodRewriter,
+    SequenceRewriterType,
+    ConditionalRewriterType,
+>;
+
+macro_rules! impl_from_rewriter {
+    ($type:ty, $variant:ident) => {
+        impl From<$type> for Rewriter {
+            fn from(rewriter: $type) -> Self {
+                Self(Either5::$variant(rewriter))
+            }
+        }
+    };
+}
+
+impl_from_rewriter!(crate::PathRewriter, A);
+impl_from_rewriter!(crate::HeaderRewriter, B);
+impl_from_rewriter!(crate::MethodRewriter, C);
+impl_from_rewriter!(SequenceRewriterType, D);
+impl_from_rewriter!(ConditionalRewriterType, E);
+
+// Implement combinator functions for rewriter types
+//
+// This provides:
+// - `then` to chain rewriters
+// - `when` to apply rewriters conditionally
 macro_rules! impl_rewriter_combinators {
     ($type:ty) => {
         #[napi]
@@ -1119,3 +1392,557 @@ impl_rewriter_combinators!(HeaderRewriter);
 impl_rewriter_combinators!(MethodRewriter);
 impl_rewriter_combinators!(SequenceRewriter);
 impl_rewriter_combinators!(ConditionalRewriter);
+
+//
+// Config-based Rewriter
+//
+
+/// Describe if a conmdition set is combined with AND or OR logic
+#[napi(string_enum = "lowercase")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ConditionOperation {
+    /// All conditions must match for the rewriters to be applied
+    #[default]
+    And,
+    /// At least one condition must match for the rewriters to be applied
+    Or,
+}
+
+/// The types of conditions which may be used in a `ConditionConfig`.
+#[napi(string_enum = "lowercase")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConditionType {
+    /// Matches based on the request path
+    Path,
+    /// Matches based on the request header
+    Header,
+    /// Matches based on the request method
+    Method,
+    /// Matches if a file exists at the given path
+    Exists,
+    /// Matches if a file does not exist at the given path
+    NotExists,
+}
+
+/// Configuration for a condition that can be used in a `ConditionalRewriterConfig`.
+#[napi(object)]
+pub struct ConditionConfig {
+    /// The type of condition to apply
+    #[napi(js_name = "type")]
+    pub condition: ConditionType,
+    /// The arguments for the condition, such as the path or header name
+    pub args: Vec<String>,
+}
+
+impl TryFrom<ConditionConfig> for crate::PathCondition {
+    type Error = Error;
+
+    fn try_from(config: ConditionConfig) -> Result<Self> {
+        if config.condition != ConditionType::Path {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Path condition type".to_string(),
+            ));
+        }
+        if config.args.len() != 1 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Path condition requires exactly one argument".to_string(),
+            ));
+        }
+        let pattern = config.args[0].clone();
+        let condition = crate::PathCondition::new(pattern)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(condition)
+    }
+}
+
+impl TryFrom<ConditionConfig> for crate::HeaderCondition {
+    type Error = Error;
+
+    fn try_from(config: ConditionConfig) -> Result<Self> {
+        if config.condition != ConditionType::Header {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Header condition type".to_string(),
+            ));
+        }
+        if config.args.len() != 2 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Header condition requires exactly two arguments".to_string(),
+            ));
+        }
+        let header = config.args[0].clone();
+        let value = config.args[1].clone();
+        let condition = crate::HeaderCondition::new(header, value)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(condition)
+    }
+}
+
+impl TryFrom<ConditionConfig> for crate::MethodCondition {
+    type Error = Error;
+
+    fn try_from(config: ConditionConfig) -> Result<Self> {
+        if config.condition != ConditionType::Method {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Method condition type".to_string(),
+            ));
+        }
+        if config.args.len() != 1 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Method condition requires exactly one argument".to_string(),
+            ));
+        }
+        let method = config.args[0].clone();
+        let condition = crate::MethodCondition::new(method)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(condition)
+    }
+}
+
+impl TryFrom<ConditionConfig> for crate::ExistenceCondition {
+    type Error = Error;
+
+    fn try_from(config: ConditionConfig) -> Result<Self> {
+        if config.condition != ConditionType::Exists {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Exists condition type".to_string(),
+            ));
+        }
+        if !config.args.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Exists condition requires no arguments".to_string(),
+            ));
+        }
+        Ok(crate::ExistenceCondition::new())
+    }
+}
+
+impl TryFrom<ConditionConfig> for crate::NonExistenceCondition {
+    type Error = Error;
+
+    fn try_from(config: ConditionConfig) -> Result<Self> {
+        if config.condition != ConditionType::NotExists {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected NotExists condition type".to_string(),
+            ));
+        }
+        if !config.args.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "NotExists condition requires no arguments".to_string(),
+            ));
+        }
+        Ok(crate::NonExistenceCondition::new())
+    }
+}
+
+impl TryFrom<(ConditionOperation, Vec<Condition>)> for Condition {
+    type Error = Error;
+
+    fn try_from((operation, conditions): (ConditionOperation, Vec<Condition>)) -> Result<Self> {
+        if conditions.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "At least one condition is required".to_string(),
+            ));
+        }
+
+        Ok(conditions
+            .into_iter()
+            .reduce(|a, b| match operation {
+                ConditionOperation::And => and(a, b),
+                ConditionOperation::Or => or(a, b),
+            })
+            .unwrap())
+    }
+}
+
+/// The types of rewriters which may be used in a `RewriterConfig`.
+#[napi(string_enum = "lowercase")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RewriterType {
+    /// Rewrites the request path
+    Path,
+    /// Rewrites a request header
+    Header,
+    /// Rewrites the request method
+    Method,
+}
+
+/// Configuration for a rewriter that can be used in a `ConditionalRewriterConfig`.
+#[napi(object)]
+pub struct RewriterConfig {
+    /// The type of rewriter to apply
+    #[napi(js_name = "type")]
+    pub rewriter_type: RewriterType,
+    /// The arguments for the rewriter, such as the pattern and replacement
+    pub args: Vec<String>,
+}
+
+//
+// Convert `RewriterConfig` into specific rewriter types.
+//
+
+impl TryFrom<RewriterConfig> for crate::PathRewriter {
+    type Error = Error;
+
+    fn try_from(config: RewriterConfig) -> Result<Self> {
+        if config.rewriter_type != RewriterType::Path {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Path rewriter type".to_string(),
+            ));
+        }
+        if config.args.len() != 2 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Path rewriter requires exactly two arguments".to_string(),
+            ));
+        }
+        let pattern = config.args[0].clone();
+        let replacement = config.args[1].clone();
+        let rewriter = crate::PathRewriter::new(pattern, replacement)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(rewriter)
+    }
+}
+
+impl TryFrom<RewriterConfig> for crate::HeaderRewriter {
+    type Error = Error;
+
+    fn try_from(config: RewriterConfig) -> Result<Self> {
+        if config.rewriter_type != RewriterType::Header {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Header rewriter type".to_string(),
+            ));
+        }
+        if config.args.len() != 3 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Header rewriter requires exactly three arguments".to_string(),
+            ));
+        }
+        let header = config.args[0].clone();
+        let pattern = config.args[1].clone();
+        let replacement = config.args[2].clone();
+        let rewriter = crate::HeaderRewriter::new(header, pattern, replacement)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(rewriter)
+    }
+}
+
+impl TryFrom<RewriterConfig> for crate::MethodRewriter {
+    type Error = Error;
+
+    fn try_from(config: RewriterConfig) -> Result<Self> {
+        if config.rewriter_type != RewriterType::Method {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Method rewriter type".to_string(),
+            ));
+        }
+        if config.args.len() != 1 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Method rewriter requires exactly one argument".to_string(),
+            ));
+        }
+        let method = config.args[0].clone();
+        let rewriter = crate::MethodRewriter::new(method.as_str())
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(rewriter)
+    }
+}
+
+/// Configuration for a conditional rewriter that can be used in a `Rewriter`.
+#[napi(object)]
+pub struct ConditionalRewriterConfig {
+    /// The logical operation to use when applying the condition set
+    pub operation: Option<ConditionOperation>,
+    /// The conditions that must be met for the rewriters to be applied
+    pub conditions: Option<Vec<ConditionConfig>>,
+    /// The rewriters to apply if the conditions are met
+    pub rewriters: Vec<RewriterConfig>,
+}
+
+/// Allows constructing rewriter and condition configurations from JSON.
+#[napi]
+pub struct Rewriter(AnyRewriterOwned);
+
+#[napi]
+impl Rewriter {
+    /// Create a new rewriter from a list of configurations.
+    ///
+    /// # Examples
+    ///
+    /// ```js
+    /// const rewriter = new Rewriter([
+    ///   {
+    ///     operation: 'And',
+    ///     conditions: [
+    ///       { type: 'Path', args: ['/old-path'] },
+    ///       { type: 'Method', args: ['GET'] }
+    ///     ],
+    ///     rewriters: [
+    ///       { type: 'Path', args: ['/new-path'] }
+    ///     ]
+    ///   },
+    ///   {
+    ///     conditions: [
+    ///       { type: 'Path', args: ['/api/*'] }
+    ///     ],
+    ///     rewriters: [
+    ///       { type: 'Header', args: ['X-API-Version', '2'] }
+    ///     ]
+    ///   }
+    /// ]);
+    /// ```
+    #[napi(constructor)]
+    pub fn new(configs: Vec<ConditionalRewriterConfig>) -> Result<Self> {
+        let rewriter = Rewriter::try_from(configs)
+            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+
+        Ok(rewriter)
+    }
+
+    /// Rewrite the given request using the configured rewriter.
+    ///
+    /// # Examples
+    ///
+    /// ```js
+    /// const rewritten = rewriter.rewrite(request);
+    /// ```
+    #[napi(js_name = "rewrite")]
+    pub fn js_rewrite(&self, request: Request) -> Result<Request> {
+        let rewritten = self
+            .rewrite(request.deref().to_owned())
+            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+
+        Ok(rewritten.into())
+    }
+}
+
+impl crate::Rewriter for Rewriter {
+    fn rewrite<B>(
+        &self,
+        request: http::Request<B>,
+    ) -> std::result::Result<http::Request<B>, crate::RewriteError> {
+        match &self.0 {
+            Either5::A(path) => path.rewrite(request),
+            Either5::B(header) => header.rewrite(request),
+            Either5::C(method) => method.rewrite(request),
+            Either5::D(sequence) => sequence.rewrite(request),
+            Either5::E(conditional) => conditional.rewrite(request),
+        }
+    }
+}
+
+impl TryFrom<ConditionalRewriterConfig> for Rewriter {
+    type Error = Error;
+
+    fn try_from(config: ConditionalRewriterConfig) -> Result<Self> {
+        // Extract fields before consuming config
+        let ConditionalRewriterConfig {
+            operation,
+            conditions,
+            rewriters,
+        } = config;
+
+        // Validate that we have at least one rewriter
+        if rewriters.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "At least one rewriter is required".to_string(),
+            ));
+        }
+
+        let rewriter: Rewriter = rewriters
+            .into_iter()
+            .map(Rewriter::try_from)
+            .collect::<Result<Vec<_>>>()?
+            .try_into()?;
+
+        if conditions.is_none() {
+            return Ok(rewriter);
+        }
+
+        let conditions = conditions.unwrap_or_default();
+        if conditions.is_empty() {
+            return Ok(rewriter);
+        }
+
+        let conditions: Vec<Condition> = conditions
+            .into_iter()
+            .map(Condition::try_from)
+            .collect::<Result<Vec<_>>>()?;
+
+        let operation = operation.unwrap_or_default();
+
+        let condition: Condition = (operation, conditions).try_into()?;
+
+        Ok(when(rewriter, condition))
+    }
+}
+
+impl TryFrom<RewriterConfig> for Rewriter {
+    type Error = Error;
+
+    fn try_from(config: RewriterConfig) -> Result<Self> {
+        Ok(Rewriter(match config.rewriter_type {
+            RewriterType::Path => Either5::A(config.try_into()?),
+            RewriterType::Header => Either5::B(config.try_into()?),
+            RewriterType::Method => Either5::C(config.try_into()?),
+        }))
+    }
+}
+
+impl TryFrom<Vec<RewriterConfig>> for Rewriter {
+    type Error = Error;
+
+    fn try_from(configs: Vec<RewriterConfig>) -> Result<Self> {
+        if configs.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "At least one rewriter configuration is required".to_string(),
+            ));
+        }
+
+        // Convert each config to a rewriter
+        configs
+            .into_iter()
+            .map(Rewriter::try_from)
+            .collect::<Result<Vec<_>>>()?
+            .try_into()
+    }
+}
+
+impl TryFrom<Vec<Rewriter>> for Rewriter {
+    type Error = Error;
+
+    fn try_from(rewriters: Vec<Rewriter>) -> Result<Self> {
+        // Ensure we have at least one rewriter
+        if rewriters.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "At least one rewriter is required".to_string(),
+            ));
+        }
+
+        // Reduce the rewriters into a single Rewriter sequence
+        Ok(rewriters.into_iter().reduce(then).unwrap().into())
+    }
+}
+
+impl TryFrom<Vec<ConditionalRewriterConfig>> for Rewriter {
+    type Error = Error;
+
+    fn try_from(configs: Vec<ConditionalRewriterConfig>) -> Result<Self> {
+        if configs.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "At least one configuration is required".to_string(),
+            ));
+        }
+
+        // Convert each config to a ConditionalRewriterType
+        configs
+            .into_iter()
+            .map(Rewriter::try_from)
+            .collect::<Result<Vec<_>>>()?
+            .try_into()
+    }
+}
+
+//
+// Generic combinators for rewriters
+//
+
+fn then<A, B>(a: A, b: B) -> Rewriter
+where
+    A: Into<Rewriter>,
+    B: Into<Rewriter>,
+{
+    match (a.into().0, b.into().0) {
+        (Either5::A(a), Either5::A(b)) => a.then(b).into(),
+        (Either5::A(a), Either5::B(b)) => a.then(b).into(),
+        (Either5::A(a), Either5::C(b)) => a.then(b).into(),
+        (Either5::A(a), Either5::D(b)) => a.then(b).into(),
+        (Either5::A(a), Either5::E(b)) => a.then(b).into(),
+
+        (Either5::B(a), Either5::A(b)) => a.then(b).into(),
+        (Either5::B(a), Either5::B(b)) => a.then(b).into(),
+        (Either5::B(a), Either5::C(b)) => a.then(b).into(),
+        (Either5::B(a), Either5::D(b)) => a.then(b).into(),
+        (Either5::B(a), Either5::E(b)) => a.then(b).into(),
+
+        (Either5::C(a), Either5::A(b)) => a.then(b).into(),
+        (Either5::C(a), Either5::B(b)) => a.then(b).into(),
+        (Either5::C(a), Either5::C(b)) => a.then(b).into(),
+        (Either5::C(a), Either5::D(b)) => a.then(b).into(),
+        (Either5::C(a), Either5::E(b)) => a.then(b).into(),
+
+        (Either5::D(a), Either5::A(b)) => a.then(b).into(),
+        (Either5::D(a), Either5::B(b)) => a.then(b).into(),
+        (Either5::D(a), Either5::C(b)) => a.then(b).into(),
+        (Either5::D(a), Either5::D(b)) => a.then(b).into(),
+        (Either5::D(a), Either5::E(b)) => a.then(b).into(),
+
+        (Either5::E(a), Either5::A(b)) => a.then(b).into(),
+        (Either5::E(a), Either5::B(b)) => a.then(b).into(),
+        (Either5::E(a), Either5::C(b)) => a.then(b).into(),
+        (Either5::E(a), Either5::D(b)) => a.then(b).into(),
+        (Either5::E(a), Either5::E(b)) => a.then(b).into(),
+    }
+}
+
+fn when<A, B>(a: A, b: B) -> Rewriter
+where
+    A: Into<Rewriter>,
+    B: Into<Condition>,
+{
+    match (a.into().0, b.into().0) {
+        (Either5::A(path), Either6::A(condition)) => path.when(condition).into(),
+        (Either5::A(path), Either6::B(condition)) => path.when(condition).into(),
+        (Either5::A(path), Either6::C(condition)) => path.when(condition).into(),
+        (Either5::A(path), Either6::D(condition)) => path.when(condition).into(),
+        (Either5::A(path), Either6::E(condition)) => path.when(condition).into(),
+        (Either5::A(path), Either6::F(condition)) => path.when(condition).into(),
+
+        (Either5::B(header), Either6::A(condition)) => header.when(condition).into(),
+        (Either5::B(header), Either6::B(condition)) => header.when(condition).into(),
+        (Either5::B(header), Either6::C(condition)) => header.when(condition).into(),
+        (Either5::B(header), Either6::D(condition)) => header.when(condition).into(),
+        (Either5::B(header), Either6::E(condition)) => header.when(condition).into(),
+        (Either5::B(header), Either6::F(condition)) => header.when(condition).into(),
+
+        (Either5::C(method), Either6::A(condition)) => method.when(condition).into(),
+        (Either5::C(method), Either6::B(condition)) => method.when(condition).into(),
+        (Either5::C(method), Either6::C(condition)) => method.when(condition).into(),
+        (Either5::C(method), Either6::D(condition)) => method.when(condition).into(),
+        (Either5::C(method), Either6::E(condition)) => method.when(condition).into(),
+        (Either5::C(method), Either6::F(condition)) => method.when(condition).into(),
+
+        (Either5::D(sequence), Either6::A(condition)) => sequence.when(condition).into(),
+        (Either5::D(sequence), Either6::B(condition)) => sequence.when(condition).into(),
+        (Either5::D(sequence), Either6::C(condition)) => sequence.when(condition).into(),
+        (Either5::D(sequence), Either6::D(condition)) => sequence.when(condition).into(),
+        (Either5::D(sequence), Either6::E(condition)) => sequence.when(condition).into(),
+        (Either5::D(sequence), Either6::F(condition)) => sequence.when(condition).into(),
+
+        (Either5::E(conditional), Either6::A(condition)) => conditional.when(condition).into(),
+        (Either5::E(conditional), Either6::B(condition)) => conditional.when(condition).into(),
+        (Either5::E(conditional), Either6::C(condition)) => conditional.when(condition).into(),
+        (Either5::E(conditional), Either6::D(condition)) => conditional.when(condition).into(),
+        (Either5::E(conditional), Either6::E(condition)) => conditional.when(condition).into(),
+        (Either5::E(conditional), Either6::F(condition)) => conditional.when(condition).into(),
+    }
+}

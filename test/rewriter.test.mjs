@@ -1,4 +1,4 @@
-import { Request, PathRewriter, HeaderRewriter, MethodRewriter, HeaderCondition, MethodCondition, SequenceRewriter, ConditionalRewriter } from '../index.js'
+import { Request, PathRewriter, HeaderRewriter, MethodRewriter, HeaderCondition, MethodCondition, SequenceRewriter, ConditionalRewriter, Rewriter } from '../index.js'
 
 import { ok, strictEqual } from 'node:assert/strict'
 import { test } from 'node:test'
@@ -171,4 +171,115 @@ test('Complex conditional and sequence chaining', async () => {
 
   strictEqual(noRewrite.uri, '/api/users', 'should not rewrite when no conditions match')
   strictEqual(noRewrite.headers.get('X-API-Version'), '3.0', 'should not rewrite header when no conditions match')
+})
+
+test('ConditionalRewriter.fromConfig creates rewriter from configuration', async () => {
+  // Test with simple configuration
+  const simpleConfig = [{
+    operation: 'and',
+    conditions: [
+      { type: 'path', args: ['^/api/.*'] },
+      { type: 'method', args: ['POST'] }
+    ],
+    rewriters: [
+      { type: 'path', args: ['^/api/v1/', '/api/v2/'] }
+    ]
+  }]
+
+  const simpleRewriter = new Rewriter(simpleConfig)
+  ok(simpleRewriter instanceof Rewriter, 'should return a ConditionalRewriter instance')
+
+  // Test request that matches conditions
+  const matchingRequest = simpleRewriter.rewrite(new Request({
+    uri: '/api/v1/users',
+    method: 'POST'
+  }))
+  strictEqual(matchingRequest.uri, '/api/v2/users', 'should rewrite when conditions match')
+
+  // Test request that doesn't match conditions
+  const nonMatchingRequest = simpleRewriter.rewrite(new Request({
+    uri: '/api/v1/users',
+    method: 'GET'
+  }))
+  strictEqual(nonMatchingRequest.uri, '/api/v1/users', 'should not rewrite when conditions do not match')
+})
+
+test('ConditionalRewriter.fromConfig with multiple rewriters and conditions', async () => {
+  // Complex configuration with multiple rewriters and OR conditions
+  const complexConfig = [
+    {
+      operation: 'or',
+      conditions: [
+        { type: 'header', args: ['X-API-Version', '1.0'] },
+        { type: 'method', args: ['POST'] }
+      ],
+      rewriters: [
+        { type: 'path', args: ['^/old/', '/new/'] },
+        { type: 'header', args: ['X-API-Version', '1.0', '2.0'] },
+        { type: 'method', args: ['PUT'] }
+      ]
+    }
+  ]
+
+  const complexRewriter = new Rewriter(complexConfig)
+
+  // Test with header condition matching
+  const headerMatch = complexRewriter.rewrite(new Request({
+    uri: '/old/api',
+    method: 'GET',
+    headers: { 'X-API-Version': '1.0' }
+  }))
+  strictEqual(headerMatch.uri, '/new/api', 'should rewrite path')
+  strictEqual(headerMatch.method, 'PUT', 'should rewrite method')
+  strictEqual(headerMatch.headers.get('X-API-Version'), '2.0', 'should rewrite header')
+
+  // Test with method condition matching
+  const methodMatch = complexRewriter.rewrite(new Request({
+    uri: '/old/api',
+    method: 'POST',
+    headers: { 'X-API-Version': '3.0' }
+  }))
+  strictEqual(methodMatch.uri, '/new/api', 'should rewrite path when POST')
+  strictEqual(methodMatch.method, 'PUT', 'should rewrite method')
+  strictEqual(methodMatch.headers.get('X-API-Version'), '3.0', 'header should not change when pattern does not match')
+
+  // Test with no conditions matching
+  const noMatch = complexRewriter.rewrite(new Request({
+    uri: '/old/api',
+    method: 'GET',
+    headers: { 'X-API-Version': '3.0' }
+  }))
+  strictEqual(noMatch.uri, '/old/api', 'should not rewrite when no conditions match')
+  strictEqual(noMatch.method, 'GET', 'method should not change')
+  strictEqual(noMatch.headers.get('X-API-Version'), '3.0', 'header should not change')
+})
+
+test('ConditionalRewriter.fromConfig with no conditions applies rewriters unconditionally', async () => {
+  const unconditionalConfig = [
+    {
+      rewriters: [
+        { type: 'path', args: ['^/api/', '/v2/'] },
+        { type: 'method', args: ['POST'] }
+      ]
+    },
+    {
+      rewriters: [
+        { type: 'header', args: ['X-API-Version', '.*', '2.0'] }
+      ]
+    }
+  ]
+
+  const unconditionalRewriter = new Rewriter(unconditionalConfig)
+
+  // Should always apply rewriters
+  const rewritten = unconditionalRewriter.rewrite(new Request({
+    uri: '/api/users',
+    method: 'GET',
+    headers: {
+      'X-API-Version': '1.0'
+    }
+  }))
+  strictEqual(rewritten.uri, '/v2/users', 'should rewrite path unconditionally')
+  strictEqual(rewritten.method, 'POST', 'should rewrite method unconditionally')
+  strictEqual(rewritten.headers.get('X-API-Version'), '2.0', 'should rewrite header unconditionally')
 })
