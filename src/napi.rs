@@ -14,7 +14,7 @@ use crate::{Condition as ConditionTrait, ConditionExt};
 
 /// A N-API wrapper for the `PathCondition` type.
 #[napi]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PathCondition(crate::PathCondition);
 
 #[napi]
@@ -49,7 +49,7 @@ impl PathCondition {
 
 /// A N-API wrapper for the `HeaderCondition` type.
 #[napi]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HeaderCondition(crate::HeaderCondition);
 
 #[napi]
@@ -84,7 +84,7 @@ impl HeaderCondition {
 
 /// A N-API wrapper for the `MethodCondition` type.
 #[napi]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MethodCondition(crate::MethodCondition);
 
 #[napi]
@@ -119,7 +119,7 @@ impl MethodCondition {
 
 /// A N-API wrapper for the `ExistenceCondition` type.
 #[napi]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ExistenceCondition(crate::ExistenceCondition);
 
 #[napi]
@@ -151,7 +151,7 @@ impl ExistenceCondition {
 
 /// A N-API wrapper for the `NonExistenceCondition` type.
 #[napi]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct NonExistenceCondition(crate::NonExistenceCondition);
 
 #[napi]
@@ -481,6 +481,7 @@ impl_from_group_condition!(GroupConditionType, GroupConditionType, Group_Group);
 
 /// A N-API wrapper for the `GroupCondition` type.
 #[napi]
+#[derive(Clone, Debug)]
 pub struct GroupCondition(GroupConditionType);
 
 #[napi]
@@ -765,7 +766,7 @@ use crate::{Rewriter as RewriterTrait, RewriterExt};
 
 /// A N-API wrapper for the `PathRewriter` type.
 #[napi]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PathRewriter(crate::PathRewriter);
 
 #[napi]
@@ -805,7 +806,7 @@ impl PathRewriter {
 
 /// A N-API wrapper for the `HeaderRewriter` type.
 #[napi]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HeaderRewriter(crate::HeaderRewriter);
 
 #[napi]
@@ -845,7 +846,7 @@ impl HeaderRewriter {
 
 /// A N-API wrapper for the `MethodRewriter` type.
 #[napi]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MethodRewriter(crate::MethodRewriter);
 
 #[napi]
@@ -1051,6 +1052,7 @@ impl_from_sequence_rewriter!(
 
 /// A N-API wrapper for the `SequenceRewriter` type.
 #[napi]
+#[derive(Clone, Debug)]
 pub struct SequenceRewriter(SequenceRewriterType);
 
 #[napi]
@@ -1280,6 +1282,7 @@ impl_from_conditional_rewriter!(
 
 /// A N-API wrapper for the `ConditionalRewriter` type.
 #[napi]
+#[derive(Clone, Debug)]
 pub struct ConditionalRewriter(ConditionalRewriterType);
 
 #[napi]
@@ -1399,7 +1402,7 @@ impl_rewriter_combinators!(ConditionalRewriter);
 
 /// Describe if a conmdition set is combined with AND or OR logic
 #[napi(string_enum = "lowercase")]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub enum ConditionOperation {
     /// All conditions must match for the rewriters to be applied
     #[default]
@@ -1410,7 +1413,7 @@ pub enum ConditionOperation {
 
 /// The types of conditions which may be used in a `ConditionConfig`.
 #[napi(string_enum = "lowercase")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ConditionType {
     /// Matches based on the request path
     Path,
@@ -1426,6 +1429,7 @@ pub enum ConditionType {
 
 /// Configuration for a condition that can be used in a `ConditionalRewriterConfig`.
 #[napi(object)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ConditionConfig {
     /// The type of condition to apply
     #[napi(js_name = "type")]
@@ -1567,7 +1571,7 @@ impl TryFrom<(ConditionOperation, Vec<Condition>)> for Condition {
 
 /// The types of rewriters which may be used in a `RewriterConfig`.
 #[napi(string_enum = "lowercase")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum RewriterType {
     /// Rewrites the request path
     Path,
@@ -1579,6 +1583,7 @@ pub enum RewriterType {
 
 /// Configuration for a rewriter that can be used in a `ConditionalRewriterConfig`.
 #[napi(object)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct RewriterConfig {
     /// The type of rewriter to apply
     #[napi(js_name = "type")]
@@ -1665,6 +1670,7 @@ impl TryFrom<RewriterConfig> for crate::MethodRewriter {
 
 /// Configuration for a conditional rewriter that can be used in a `Rewriter`.
 #[napi(object)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ConditionalRewriterConfig {
     /// The logical operation to use when applying the condition set
     pub operation: Option<ConditionOperation>,
@@ -1676,6 +1682,7 @@ pub struct ConditionalRewriterConfig {
 
 /// Allows constructing rewriter and condition configurations from JSON.
 #[napi]
+#[derive(Clone, Debug)]
 pub struct Rewriter(AnyRewriterOwned);
 
 #[napi]
