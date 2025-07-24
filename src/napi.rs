@@ -959,7 +959,10 @@ impl crate::Rewriter for SequenceRewriterType {
             SequenceRewriterType::Conditional_Header(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Method(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Sequence(r) => r.rewrite(request),
-            SequenceRewriterType::Conditional_Conditional(r) => r.rewrite(request),
+            SequenceRewriterType::Conditional_Conditional(r) => {
+              println!("yep: {:#?}", r);
+              r.rewrite(request)
+            },
         }
     }
 }
@@ -1413,7 +1416,7 @@ pub enum ConditionOperation {
 }
 
 /// The types of conditions which may be used in a `ConditionConfig`.
-#[napi(string_enum = "lowercase")]
+#[napi(string_enum = "snake_case")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ConditionType {
     /// Matches based on the request path
@@ -1436,7 +1439,7 @@ pub struct ConditionConfig {
     #[napi(js_name = "type")]
     pub condition: ConditionType,
     /// The arguments for the condition, such as the path or header name
-    pub args: Vec<String>,
+    pub args: Option<Vec<String>>,
 }
 
 impl TryFrom<ConditionConfig> for crate::PathCondition {
@@ -1449,13 +1452,14 @@ impl TryFrom<ConditionConfig> for crate::PathCondition {
                 "Expected Path condition type".to_string(),
             ));
         }
-        if config.args.len() != 1 {
+        let args = config.args.unwrap_or_default();
+        if args.len() != 1 {
             return Err(Error::new(
                 Status::InvalidArg,
                 "Path condition requires exactly one argument".to_string(),
             ));
         }
-        let pattern = config.args[0].clone();
+        let pattern = args[0].clone();
         let condition = crate::PathCondition::new(pattern)
             .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
         Ok(condition)
@@ -1472,14 +1476,15 @@ impl TryFrom<ConditionConfig> for crate::HeaderCondition {
                 "Expected Header condition type".to_string(),
             ));
         }
-        if config.args.len() != 2 {
+        let args = config.args.unwrap_or_default();
+        if args.len() != 2 {
             return Err(Error::new(
                 Status::InvalidArg,
                 "Header condition requires exactly two arguments".to_string(),
             ));
         }
-        let header = config.args[0].clone();
-        let value = config.args[1].clone();
+        let header = args[0].clone();
+        let value = args[1].clone();
         let condition = crate::HeaderCondition::new(header, value)
             .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
         Ok(condition)
@@ -1496,13 +1501,14 @@ impl TryFrom<ConditionConfig> for crate::MethodCondition {
                 "Expected Method condition type".to_string(),
             ));
         }
-        if config.args.len() != 1 {
+        let args = config.args.unwrap_or_default();
+        if args.len() != 1 {
             return Err(Error::new(
                 Status::InvalidArg,
                 "Method condition requires exactly one argument".to_string(),
             ));
         }
-        let method = config.args[0].clone();
+        let method = args[0].clone();
         let condition = crate::MethodCondition::new(method)
             .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
         Ok(condition)
@@ -1519,7 +1525,7 @@ impl TryFrom<ConditionConfig> for crate::ExistenceCondition {
                 "Expected Exists condition type".to_string(),
             ));
         }
-        if !config.args.is_empty() {
+        if !config.args.unwrap_or_default().is_empty() {
             return Err(Error::new(
                 Status::InvalidArg,
                 "Exists condition requires no arguments".to_string(),
@@ -1539,7 +1545,7 @@ impl TryFrom<ConditionConfig> for crate::NonExistenceCondition {
                 "Expected NotExists condition type".to_string(),
             ));
         }
-        if !config.args.is_empty() {
+        if !config.args.unwrap_or_default().is_empty() {
             return Err(Error::new(
                 Status::InvalidArg,
                 "NotExists condition requires no arguments".to_string(),
@@ -1590,7 +1596,7 @@ pub struct RewriterConfig {
     #[napi(js_name = "type")]
     pub rewriter_type: RewriterType,
     /// The arguments for the rewriter, such as the pattern and replacement
-    pub args: Vec<String>,
+    pub args: Option<Vec<String>>,
 }
 
 //
@@ -1607,14 +1613,15 @@ impl TryFrom<RewriterConfig> for crate::PathRewriter {
                 "Expected Path rewriter type".to_string(),
             ));
         }
-        if config.args.len() != 2 {
+        let args = config.args.unwrap_or_default();
+        if args.len() != 2 {
             return Err(Error::new(
                 Status::InvalidArg,
                 "Path rewriter requires exactly two arguments".to_string(),
             ));
         }
-        let pattern = config.args[0].clone();
-        let replacement = config.args[1].clone();
+        let pattern = args[0].clone();
+        let replacement = args[1].clone();
         let rewriter = crate::PathRewriter::new(pattern, replacement)
             .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
         Ok(rewriter)
@@ -1631,15 +1638,16 @@ impl TryFrom<RewriterConfig> for crate::HeaderRewriter {
                 "Expected Header rewriter type".to_string(),
             ));
         }
-        if config.args.len() != 3 {
+        let args = config.args.unwrap_or_default();
+        if args.len() != 3 {
             return Err(Error::new(
                 Status::InvalidArg,
                 "Header rewriter requires exactly three arguments".to_string(),
             ));
         }
-        let header = config.args[0].clone();
-        let pattern = config.args[1].clone();
-        let replacement = config.args[2].clone();
+        let header = args[0].clone();
+        let pattern = args[1].clone();
+        let replacement = args[2].clone();
         let rewriter = crate::HeaderRewriter::new(header, pattern, replacement)
             .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
         Ok(rewriter)
@@ -1656,13 +1664,14 @@ impl TryFrom<RewriterConfig> for crate::MethodRewriter {
                 "Expected Method rewriter type".to_string(),
             ));
         }
-        if config.args.len() != 1 {
+        let args = config.args.unwrap_or_default();
+        if args.len() != 1 {
             return Err(Error::new(
                 Status::InvalidArg,
                 "Method rewriter requires exactly one argument".to_string(),
             ));
         }
-        let method = config.args[0].clone();
+        let method = args[0].clone();
         let rewriter = crate::MethodRewriter::new(method.as_str())
             .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
         Ok(rewriter)

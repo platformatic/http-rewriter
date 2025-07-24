@@ -217,7 +217,7 @@ impl Rewriter for PathRewriter {
         if new_path != path {
             // Build new URI with the new path
             let uri_str = if let Some(query) = parts.uri.query() {
-                format!("{}?{}", new_path, query)
+                format!("{new_path}?{query}")
             } else {
                 new_path.to_string()
             };
