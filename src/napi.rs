@@ -885,6 +885,46 @@ impl MethodRewriter {
     }
 }
 
+/// A N-API wrapper for the `HrefRewriter` type.
+#[napi]
+#[derive(Clone, Debug)]
+pub struct HrefRewriter(crate::HrefRewriter);
+
+#[napi]
+impl HrefRewriter {
+    /// Create a new href rewriter.
+    ///
+    /// # Examples
+    ///
+    /// ```js
+    /// const rewriter = new HrefRewriter('^http://', 'https://');
+    /// ```
+    #[napi(constructor)]
+    pub fn new(pattern: String, replacement: String) -> Result<Self> {
+        let rewriter = crate::HrefRewriter::new(pattern, replacement)
+            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+
+        Ok(Self(rewriter))
+    }
+
+    /// Rewrite the given request href.
+    ///
+    /// # Examples
+    ///
+    /// ```js
+    /// const rewritten = rewriter.rewrite(request);
+    /// ```
+    #[napi]
+    pub fn rewrite(&self, request: Request) -> Result<Request> {
+        let rewritten = self
+            .0
+            .rewrite(request.deref().to_owned())
+            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+
+        Ok(rewritten.into())
+    }
+}
+
 // Since Rewriter traits have generic methods, we need to create a type-erased
 // wrapper that can be used with SequenceRewriter
 #[allow(non_camel_case_types)]
@@ -893,25 +933,37 @@ enum SequenceRewriterType {
     Path_Path(crate::SequenceRewriter<crate::PathRewriter, crate::PathRewriter>),
     Path_Header(crate::SequenceRewriter<crate::PathRewriter, crate::HeaderRewriter>),
     Path_Method(crate::SequenceRewriter<crate::PathRewriter, crate::MethodRewriter>),
+    Path_Href(crate::SequenceRewriter<crate::PathRewriter, crate::HrefRewriter>),
     Path_Sequence(crate::SequenceRewriter<crate::PathRewriter, SequenceRewriterType>),
     Path_Conditional(crate::SequenceRewriter<crate::PathRewriter, ConditionalRewriterType>),
 
     Header_Path(crate::SequenceRewriter<crate::HeaderRewriter, crate::PathRewriter>),
     Header_Header(crate::SequenceRewriter<crate::HeaderRewriter, crate::HeaderRewriter>),
     Header_Method(crate::SequenceRewriter<crate::HeaderRewriter, crate::MethodRewriter>),
+    Header_Href(crate::SequenceRewriter<crate::HeaderRewriter, crate::HrefRewriter>),
     Header_Sequence(crate::SequenceRewriter<crate::HeaderRewriter, SequenceRewriterType>),
     Header_Conditional(crate::SequenceRewriter<crate::HeaderRewriter, ConditionalRewriterType>),
 
     Method_Path(crate::SequenceRewriter<crate::MethodRewriter, crate::PathRewriter>),
     Method_Header(crate::SequenceRewriter<crate::MethodRewriter, crate::HeaderRewriter>),
     Method_Method(crate::SequenceRewriter<crate::MethodRewriter, crate::MethodRewriter>),
+    Method_Href(crate::SequenceRewriter<crate::MethodRewriter, crate::HrefRewriter>),
     Method_Sequence(crate::SequenceRewriter<crate::MethodRewriter, SequenceRewriterType>),
     Method_Conditional(crate::SequenceRewriter<crate::MethodRewriter, ConditionalRewriterType>),
+
+    // Sequences with href
+    Href_Path(crate::SequenceRewriter<crate::HrefRewriter, crate::PathRewriter>),
+    Href_Header(crate::SequenceRewriter<crate::HrefRewriter, crate::HeaderRewriter>),
+    Href_Method(crate::SequenceRewriter<crate::HrefRewriter, crate::MethodRewriter>),
+    Href_Href(crate::SequenceRewriter<crate::HrefRewriter, crate::HrefRewriter>),
+    Href_Sequence(crate::SequenceRewriter<crate::HrefRewriter, SequenceRewriterType>),
+    Href_Conditional(crate::SequenceRewriter<crate::HrefRewriter, ConditionalRewriterType>),
 
     // Sequences with sequences (for nested sequences)
     Sequence_Path(crate::SequenceRewriter<SequenceRewriterType, crate::PathRewriter>),
     Sequence_Header(crate::SequenceRewriter<SequenceRewriterType, crate::HeaderRewriter>),
     Sequence_Method(crate::SequenceRewriter<SequenceRewriterType, crate::MethodRewriter>),
+    Sequence_Href(crate::SequenceRewriter<SequenceRewriterType, crate::HrefRewriter>),
     Sequence_Sequence(crate::SequenceRewriter<SequenceRewriterType, SequenceRewriterType>),
     Sequence_Conditional(crate::SequenceRewriter<SequenceRewriterType, ConditionalRewriterType>),
 
@@ -919,6 +971,7 @@ enum SequenceRewriterType {
     Conditional_Path(crate::SequenceRewriter<ConditionalRewriterType, crate::PathRewriter>),
     Conditional_Header(crate::SequenceRewriter<ConditionalRewriterType, crate::HeaderRewriter>),
     Conditional_Method(crate::SequenceRewriter<ConditionalRewriterType, crate::MethodRewriter>),
+    Conditional_Href(crate::SequenceRewriter<ConditionalRewriterType, crate::HrefRewriter>),
     Conditional_Sequence(crate::SequenceRewriter<ConditionalRewriterType, SequenceRewriterType>),
     Conditional_Conditional(
         crate::SequenceRewriter<ConditionalRewriterType, ConditionalRewriterType>,
@@ -934,35 +987,47 @@ impl crate::Rewriter for SequenceRewriterType {
             SequenceRewriterType::Path_Path(r) => r.rewrite(request),
             SequenceRewriterType::Path_Header(r) => r.rewrite(request),
             SequenceRewriterType::Path_Method(r) => r.rewrite(request),
+            SequenceRewriterType::Path_Href(r) => r.rewrite(request),
             SequenceRewriterType::Path_Sequence(r) => r.rewrite(request),
             SequenceRewriterType::Path_Conditional(r) => r.rewrite(request),
 
             SequenceRewriterType::Header_Path(r) => r.rewrite(request),
             SequenceRewriterType::Header_Header(r) => r.rewrite(request),
             SequenceRewriterType::Header_Method(r) => r.rewrite(request),
+            SequenceRewriterType::Header_Href(r) => r.rewrite(request),
             SequenceRewriterType::Header_Sequence(r) => r.rewrite(request),
             SequenceRewriterType::Header_Conditional(r) => r.rewrite(request),
 
             SequenceRewriterType::Method_Path(r) => r.rewrite(request),
             SequenceRewriterType::Method_Header(r) => r.rewrite(request),
             SequenceRewriterType::Method_Method(r) => r.rewrite(request),
+            SequenceRewriterType::Method_Href(r) => r.rewrite(request),
             SequenceRewriterType::Method_Sequence(r) => r.rewrite(request),
             SequenceRewriterType::Method_Conditional(r) => r.rewrite(request),
+
+            SequenceRewriterType::Href_Path(r) => r.rewrite(request),
+            SequenceRewriterType::Href_Header(r) => r.rewrite(request),
+            SequenceRewriterType::Href_Method(r) => r.rewrite(request),
+            SequenceRewriterType::Href_Href(r) => r.rewrite(request),
+            SequenceRewriterType::Href_Sequence(r) => r.rewrite(request),
+            SequenceRewriterType::Href_Conditional(r) => r.rewrite(request),
 
             SequenceRewriterType::Sequence_Path(r) => r.rewrite(request),
             SequenceRewriterType::Sequence_Header(r) => r.rewrite(request),
             SequenceRewriterType::Sequence_Method(r) => r.rewrite(request),
+            SequenceRewriterType::Sequence_Href(r) => r.rewrite(request),
             SequenceRewriterType::Sequence_Sequence(r) => r.rewrite(request),
             SequenceRewriterType::Sequence_Conditional(r) => r.rewrite(request),
 
             SequenceRewriterType::Conditional_Path(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Header(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Method(r) => r.rewrite(request),
+            SequenceRewriterType::Conditional_Href(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Sequence(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Conditional(r) => {
-              println!("yep: {:#?}", r);
-              r.rewrite(request)
-            },
+                println!("yep: {:#?}", r);
+                r.rewrite(request)
+            }
         }
     }
 }
@@ -978,7 +1043,7 @@ macro_rules! impl_from_sequence_rewriter {
 
         impl From<crate::SequenceRewriter<$a, $b>> for Rewriter {
             fn from(rewriter: crate::SequenceRewriter<$a, $b>) -> Self {
-                Rewriter(Either5::D(rewriter.into()))
+                Rewriter(Either6::E(rewriter.into()))
             }
         }
     };
@@ -987,6 +1052,7 @@ macro_rules! impl_from_sequence_rewriter {
 impl_from_sequence_rewriter!(crate::PathRewriter, crate::PathRewriter, Path_Path);
 impl_from_sequence_rewriter!(crate::PathRewriter, crate::HeaderRewriter, Path_Header);
 impl_from_sequence_rewriter!(crate::PathRewriter, crate::MethodRewriter, Path_Method);
+impl_from_sequence_rewriter!(crate::PathRewriter, crate::HrefRewriter, Path_Href);
 impl_from_sequence_rewriter!(crate::PathRewriter, SequenceRewriterType, Path_Sequence);
 impl_from_sequence_rewriter!(
     crate::PathRewriter,
@@ -997,6 +1063,7 @@ impl_from_sequence_rewriter!(
 impl_from_sequence_rewriter!(crate::HeaderRewriter, crate::PathRewriter, Header_Path);
 impl_from_sequence_rewriter!(crate::HeaderRewriter, crate::HeaderRewriter, Header_Header);
 impl_from_sequence_rewriter!(crate::HeaderRewriter, crate::MethodRewriter, Header_Method);
+impl_from_sequence_rewriter!(crate::HeaderRewriter, crate::HrefRewriter, Header_Href);
 impl_from_sequence_rewriter!(crate::HeaderRewriter, SequenceRewriterType, Header_Sequence);
 impl_from_sequence_rewriter!(
     crate::HeaderRewriter,
@@ -1007,6 +1074,7 @@ impl_from_sequence_rewriter!(
 impl_from_sequence_rewriter!(crate::MethodRewriter, crate::PathRewriter, Method_Path);
 impl_from_sequence_rewriter!(crate::MethodRewriter, crate::HeaderRewriter, Method_Header);
 impl_from_sequence_rewriter!(crate::MethodRewriter, crate::MethodRewriter, Method_Method);
+impl_from_sequence_rewriter!(crate::MethodRewriter, crate::HrefRewriter, Method_Href);
 impl_from_sequence_rewriter!(crate::MethodRewriter, SequenceRewriterType, Method_Sequence);
 impl_from_sequence_rewriter!(
     crate::MethodRewriter,
@@ -1014,9 +1082,21 @@ impl_from_sequence_rewriter!(
     Method_Conditional
 );
 
+impl_from_sequence_rewriter!(crate::HrefRewriter, crate::PathRewriter, Href_Path);
+impl_from_sequence_rewriter!(crate::HrefRewriter, crate::HeaderRewriter, Href_Header);
+impl_from_sequence_rewriter!(crate::HrefRewriter, crate::MethodRewriter, Href_Method);
+impl_from_sequence_rewriter!(crate::HrefRewriter, crate::HrefRewriter, Href_Href);
+impl_from_sequence_rewriter!(crate::HrefRewriter, SequenceRewriterType, Href_Sequence);
+impl_from_sequence_rewriter!(
+    crate::HrefRewriter,
+    ConditionalRewriterType,
+    Href_Conditional
+);
+
 impl_from_sequence_rewriter!(SequenceRewriterType, crate::PathRewriter, Sequence_Path);
 impl_from_sequence_rewriter!(SequenceRewriterType, crate::HeaderRewriter, Sequence_Header);
 impl_from_sequence_rewriter!(SequenceRewriterType, crate::MethodRewriter, Sequence_Method);
+impl_from_sequence_rewriter!(SequenceRewriterType, crate::HrefRewriter, Sequence_Href);
 impl_from_sequence_rewriter!(
     SequenceRewriterType,
     SequenceRewriterType,
@@ -1042,6 +1122,11 @@ impl_from_sequence_rewriter!(
     ConditionalRewriterType,
     crate::MethodRewriter,
     Conditional_Method
+);
+impl_from_sequence_rewriter!(
+    ConditionalRewriterType,
+    crate::HrefRewriter,
+    Conditional_Href
 );
 impl_from_sequence_rewriter!(
     ConditionalRewriterType,
@@ -1108,6 +1193,14 @@ enum ConditionalRewriterType {
         crate::ConditionalRewriter<crate::MethodRewriter, crate::NonExistenceCondition>,
     ),
     Method_Group(crate::ConditionalRewriter<crate::MethodRewriter, GroupConditionType>),
+    Href_Path(crate::ConditionalRewriter<crate::HrefRewriter, crate::PathCondition>),
+    Href_Header(crate::ConditionalRewriter<crate::HrefRewriter, crate::HeaderCondition>),
+    Href_Method(crate::ConditionalRewriter<crate::HrefRewriter, crate::MethodCondition>),
+    Href_Existence(crate::ConditionalRewriter<crate::HrefRewriter, crate::ExistenceCondition>),
+    Href_NonExistence(
+        crate::ConditionalRewriter<crate::HrefRewriter, crate::NonExistenceCondition>,
+    ),
+    Href_Group(crate::ConditionalRewriter<crate::HrefRewriter, GroupConditionType>),
     Sequence_Path(crate::ConditionalRewriter<SequenceRewriterType, crate::PathCondition>),
     Sequence_Header(crate::ConditionalRewriter<SequenceRewriterType, crate::HeaderCondition>),
     Sequence_Method(crate::ConditionalRewriter<SequenceRewriterType, crate::MethodCondition>),
@@ -1152,6 +1245,12 @@ impl crate::Rewriter for ConditionalRewriterType {
             ConditionalRewriterType::Method_Existence(r) => r.rewrite(request),
             ConditionalRewriterType::Method_NonExistence(r) => r.rewrite(request),
             ConditionalRewriterType::Method_Group(r) => r.rewrite(request),
+            ConditionalRewriterType::Href_Path(r) => r.rewrite(request),
+            ConditionalRewriterType::Href_Header(r) => r.rewrite(request),
+            ConditionalRewriterType::Href_Method(r) => r.rewrite(request),
+            ConditionalRewriterType::Href_Existence(r) => r.rewrite(request),
+            ConditionalRewriterType::Href_NonExistence(r) => r.rewrite(request),
+            ConditionalRewriterType::Href_Group(r) => r.rewrite(request),
             ConditionalRewriterType::Sequence_Path(r) => r.rewrite(request),
             ConditionalRewriterType::Sequence_Header(r) => r.rewrite(request),
             ConditionalRewriterType::Sequence_Method(r) => r.rewrite(request),
@@ -1179,7 +1278,7 @@ macro_rules! impl_from_conditional_rewriter {
 
         impl From<crate::ConditionalRewriter<$a, $b>> for Rewriter {
             fn from(rewriter: crate::ConditionalRewriter<$a, $b>) -> Self {
-                Rewriter(Either5::E(rewriter.into()))
+                Rewriter(Either6::F(rewriter.into()))
             }
         }
     };
@@ -1229,6 +1328,21 @@ impl_from_conditional_rewriter!(
     Method_NonExistence
 );
 impl_from_conditional_rewriter!(crate::MethodRewriter, GroupConditionType, Method_Group);
+
+impl_from_conditional_rewriter!(crate::HrefRewriter, crate::PathCondition, Href_Path);
+impl_from_conditional_rewriter!(crate::HrefRewriter, crate::HeaderCondition, Href_Header);
+impl_from_conditional_rewriter!(crate::HrefRewriter, crate::MethodCondition, Href_Method);
+impl_from_conditional_rewriter!(
+    crate::HrefRewriter,
+    crate::ExistenceCondition,
+    Href_Existence
+);
+impl_from_conditional_rewriter!(
+    crate::HrefRewriter,
+    crate::NonExistenceCondition,
+    Href_NonExistence
+);
+impl_from_conditional_rewriter!(crate::HrefRewriter, GroupConditionType, Href_Group);
 
 impl_from_conditional_rewriter!(SequenceRewriterType, crate::PathCondition, Sequence_Path);
 impl_from_conditional_rewriter!(
@@ -1310,19 +1424,21 @@ impl ConditionalRewriter {
 }
 
 /// Type alias for any rewriter which can be passed to `then`/`when` methods in JS
-type AnyRewriter<'a> = Either5<
+type AnyRewriter<'a> = Either6<
     &'a PathRewriter,
     &'a HeaderRewriter,
     &'a MethodRewriter,
+    &'a HrefRewriter,
     &'a SequenceRewriter,
     &'a ConditionalRewriter,
 >;
 
 // Type alias for any rewriter which can be passed to `then`/`when` methods in Rust
-type AnyRewriterOwned = Either5<
+type AnyRewriterOwned = Either6<
     crate::PathRewriter,
     crate::HeaderRewriter,
     crate::MethodRewriter,
+    crate::HrefRewriter,
     SequenceRewriterType,
     ConditionalRewriterType,
 >;
@@ -1331,7 +1447,7 @@ macro_rules! impl_from_rewriter {
     ($type:ty, $variant:ident) => {
         impl From<$type> for Rewriter {
             fn from(rewriter: $type) -> Self {
-                Self(Either5::$variant(rewriter))
+                Self(Either6::$variant(rewriter))
             }
         }
     };
@@ -1340,8 +1456,9 @@ macro_rules! impl_from_rewriter {
 impl_from_rewriter!(crate::PathRewriter, A);
 impl_from_rewriter!(crate::HeaderRewriter, B);
 impl_from_rewriter!(crate::MethodRewriter, C);
-impl_from_rewriter!(SequenceRewriterType, D);
-impl_from_rewriter!(ConditionalRewriterType, E);
+impl_from_rewriter!(crate::HrefRewriter, D);
+impl_from_rewriter!(SequenceRewriterType, E);
+impl_from_rewriter!(ConditionalRewriterType, F);
 
 // Implement combinator functions for rewriter types
 //
@@ -1363,11 +1480,12 @@ macro_rules! impl_rewriter_combinators {
             pub fn then(&self, other: AnyRewriter) -> Result<SequenceRewriter> {
                 let this = self.0.clone();
                 Ok(SequenceRewriter(match other {
-                    Either5::A(path) => this.then(path.0.clone()).into(),
-                    Either5::B(header) => this.then(header.0.clone()).into(),
-                    Either5::C(method) => this.then(method.0.clone()).into(),
-                    Either5::D(sequence) => this.then(sequence.0.clone()).into(),
-                    Either5::E(conditional) => this.then(conditional.0.clone()).into(),
+                    Either6::A(path) => this.then(path.0.clone()).into(),
+                    Either6::B(header) => this.then(header.0.clone()).into(),
+                    Either6::C(method) => this.then(method.0.clone()).into(),
+                    Either6::D(href) => this.then(href.0.clone()).into(),
+                    Either6::E(sequence) => this.then(sequence.0.clone()).into(),
+                    Either6::F(conditional) => this.then(conditional.0.clone()).into(),
                 }))
             }
 
@@ -1397,6 +1515,7 @@ macro_rules! impl_rewriter_combinators {
 impl_rewriter_combinators!(PathRewriter);
 impl_rewriter_combinators!(HeaderRewriter);
 impl_rewriter_combinators!(MethodRewriter);
+impl_rewriter_combinators!(HrefRewriter);
 impl_rewriter_combinators!(SequenceRewriter);
 impl_rewriter_combinators!(ConditionalRewriter);
 
@@ -1586,6 +1705,8 @@ pub enum RewriterType {
     Header,
     /// Rewrites the request method
     Method,
+    /// Rewrites the request href
+    Href,
 }
 
 /// Configuration for a rewriter that can be used in a `ConditionalRewriterConfig`.
@@ -1678,6 +1799,31 @@ impl TryFrom<RewriterConfig> for crate::MethodRewriter {
     }
 }
 
+impl TryFrom<RewriterConfig> for crate::HrefRewriter {
+    type Error = Error;
+
+    fn try_from(config: RewriterConfig) -> Result<Self> {
+        if config.rewriter_type != RewriterType::Href {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Expected Href rewriter type".to_string(),
+            ));
+        }
+        let args = config.args.unwrap_or_default();
+        if args.len() != 2 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                "Href rewriter requires exactly two arguments".to_string(),
+            ));
+        }
+        let pattern = args[0].clone();
+        let replacement = args[1].clone();
+        let rewriter = crate::HrefRewriter::new(pattern, replacement)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(rewriter)
+    }
+}
+
 /// Configuration for a conditional rewriter that can be used in a `Rewriter`.
 #[napi(object)]
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -1754,11 +1900,12 @@ impl crate::Rewriter for Rewriter {
         request: http::Request<B>,
     ) -> std::result::Result<http::Request<B>, crate::RewriteError> {
         match &self.0 {
-            Either5::A(path) => path.rewrite(request),
-            Either5::B(header) => header.rewrite(request),
-            Either5::C(method) => method.rewrite(request),
-            Either5::D(sequence) => sequence.rewrite(request),
-            Either5::E(conditional) => conditional.rewrite(request),
+            Either6::A(path) => path.rewrite(request),
+            Either6::B(header) => header.rewrite(request),
+            Either6::C(method) => method.rewrite(request),
+            Either6::D(href) => href.rewrite(request),
+            Either6::E(sequence) => sequence.rewrite(request),
+            Either6::F(conditional) => conditional.rewrite(request),
         }
     }
 }
@@ -1776,11 +1923,12 @@ impl FromNapiValue for Rewriter {
         // If that fails, try to convert from AnyRewriter
         if let Ok(rewriter) = unsafe { AnyRewriter::from_napi_value(env, value) } {
             return Ok(match rewriter {
-                Either5::A(PathRewriter(path)) => path.to_owned().into(),
-                Either5::B(HeaderRewriter(header)) => header.to_owned().into(),
-                Either5::C(MethodRewriter(method)) => method.to_owned().into(),
-                Either5::D(SequenceRewriter(sequence)) => sequence.to_owned().into(),
-                Either5::E(ConditionalRewriter(conditional)) => conditional.to_owned().into(),
+                Either6::A(PathRewriter(path)) => path.to_owned().into(),
+                Either6::B(HeaderRewriter(header)) => header.to_owned().into(),
+                Either6::C(MethodRewriter(method)) => method.to_owned().into(),
+                Either6::D(HrefRewriter(href)) => href.to_owned().into(),
+                Either6::E(SequenceRewriter(sequence)) => sequence.to_owned().into(),
+                Either6::F(ConditionalRewriter(conditional)) => conditional.to_owned().into(),
             });
         }
 
@@ -1844,9 +1992,10 @@ impl TryFrom<RewriterConfig> for Rewriter {
 
     fn try_from(config: RewriterConfig) -> Result<Self> {
         Ok(Rewriter(match config.rewriter_type {
-            RewriterType::Path => Either5::A(config.try_into()?),
-            RewriterType::Header => Either5::B(config.try_into()?),
-            RewriterType::Method => Either5::C(config.try_into()?),
+            RewriterType::Path => Either6::A(config.try_into()?),
+            RewriterType::Header => Either6::B(config.try_into()?),
+            RewriterType::Method => Either6::C(config.try_into()?),
+            RewriterType::Href => Either6::D(config.try_into()?),
         }))
     }
 }
@@ -1918,35 +2067,47 @@ where
     B: Into<Rewriter>,
 {
     match (a.into().0, b.into().0) {
-        (Either5::A(a), Either5::A(b)) => a.then(b).into(),
-        (Either5::A(a), Either5::B(b)) => a.then(b).into(),
-        (Either5::A(a), Either5::C(b)) => a.then(b).into(),
-        (Either5::A(a), Either5::D(b)) => a.then(b).into(),
-        (Either5::A(a), Either5::E(b)) => a.then(b).into(),
+        (Either6::A(a), Either6::A(b)) => a.then(b).into(),
+        (Either6::A(a), Either6::B(b)) => a.then(b).into(),
+        (Either6::A(a), Either6::C(b)) => a.then(b).into(),
+        (Either6::A(a), Either6::D(b)) => a.then(b).into(),
+        (Either6::A(a), Either6::E(b)) => a.then(b).into(),
+        (Either6::A(a), Either6::F(b)) => a.then(b).into(),
 
-        (Either5::B(a), Either5::A(b)) => a.then(b).into(),
-        (Either5::B(a), Either5::B(b)) => a.then(b).into(),
-        (Either5::B(a), Either5::C(b)) => a.then(b).into(),
-        (Either5::B(a), Either5::D(b)) => a.then(b).into(),
-        (Either5::B(a), Either5::E(b)) => a.then(b).into(),
+        (Either6::B(a), Either6::A(b)) => a.then(b).into(),
+        (Either6::B(a), Either6::B(b)) => a.then(b).into(),
+        (Either6::B(a), Either6::C(b)) => a.then(b).into(),
+        (Either6::B(a), Either6::D(b)) => a.then(b).into(),
+        (Either6::B(a), Either6::E(b)) => a.then(b).into(),
+        (Either6::B(a), Either6::F(b)) => a.then(b).into(),
 
-        (Either5::C(a), Either5::A(b)) => a.then(b).into(),
-        (Either5::C(a), Either5::B(b)) => a.then(b).into(),
-        (Either5::C(a), Either5::C(b)) => a.then(b).into(),
-        (Either5::C(a), Either5::D(b)) => a.then(b).into(),
-        (Either5::C(a), Either5::E(b)) => a.then(b).into(),
+        (Either6::C(a), Either6::A(b)) => a.then(b).into(),
+        (Either6::C(a), Either6::B(b)) => a.then(b).into(),
+        (Either6::C(a), Either6::C(b)) => a.then(b).into(),
+        (Either6::C(a), Either6::D(b)) => a.then(b).into(),
+        (Either6::C(a), Either6::E(b)) => a.then(b).into(),
+        (Either6::C(a), Either6::F(b)) => a.then(b).into(),
 
-        (Either5::D(a), Either5::A(b)) => a.then(b).into(),
-        (Either5::D(a), Either5::B(b)) => a.then(b).into(),
-        (Either5::D(a), Either5::C(b)) => a.then(b).into(),
-        (Either5::D(a), Either5::D(b)) => a.then(b).into(),
-        (Either5::D(a), Either5::E(b)) => a.then(b).into(),
+        (Either6::D(a), Either6::A(b)) => a.then(b).into(),
+        (Either6::D(a), Either6::B(b)) => a.then(b).into(),
+        (Either6::D(a), Either6::C(b)) => a.then(b).into(),
+        (Either6::D(a), Either6::D(b)) => a.then(b).into(),
+        (Either6::D(a), Either6::E(b)) => a.then(b).into(),
+        (Either6::D(a), Either6::F(b)) => a.then(b).into(),
 
-        (Either5::E(a), Either5::A(b)) => a.then(b).into(),
-        (Either5::E(a), Either5::B(b)) => a.then(b).into(),
-        (Either5::E(a), Either5::C(b)) => a.then(b).into(),
-        (Either5::E(a), Either5::D(b)) => a.then(b).into(),
-        (Either5::E(a), Either5::E(b)) => a.then(b).into(),
+        (Either6::E(a), Either6::A(b)) => a.then(b).into(),
+        (Either6::E(a), Either6::B(b)) => a.then(b).into(),
+        (Either6::E(a), Either6::C(b)) => a.then(b).into(),
+        (Either6::E(a), Either6::D(b)) => a.then(b).into(),
+        (Either6::E(a), Either6::E(b)) => a.then(b).into(),
+        (Either6::E(a), Either6::F(b)) => a.then(b).into(),
+
+        (Either6::F(a), Either6::A(b)) => a.then(b).into(),
+        (Either6::F(a), Either6::B(b)) => a.then(b).into(),
+        (Either6::F(a), Either6::C(b)) => a.then(b).into(),
+        (Either6::F(a), Either6::D(b)) => a.then(b).into(),
+        (Either6::F(a), Either6::E(b)) => a.then(b).into(),
+        (Either6::F(a), Either6::F(b)) => a.then(b).into(),
     }
 }
 
@@ -1956,39 +2117,46 @@ where
     B: Into<Condition>,
 {
     match (a.into().0, b.into().0) {
-        (Either5::A(path), Either6::A(condition)) => path.when(condition).into(),
-        (Either5::A(path), Either6::B(condition)) => path.when(condition).into(),
-        (Either5::A(path), Either6::C(condition)) => path.when(condition).into(),
-        (Either5::A(path), Either6::D(condition)) => path.when(condition).into(),
-        (Either5::A(path), Either6::E(condition)) => path.when(condition).into(),
-        (Either5::A(path), Either6::F(condition)) => path.when(condition).into(),
+        (Either6::A(path), Either6::A(condition)) => path.when(condition).into(),
+        (Either6::A(path), Either6::B(condition)) => path.when(condition).into(),
+        (Either6::A(path), Either6::C(condition)) => path.when(condition).into(),
+        (Either6::A(path), Either6::D(condition)) => path.when(condition).into(),
+        (Either6::A(path), Either6::E(condition)) => path.when(condition).into(),
+        (Either6::A(path), Either6::F(condition)) => path.when(condition).into(),
 
-        (Either5::B(header), Either6::A(condition)) => header.when(condition).into(),
-        (Either5::B(header), Either6::B(condition)) => header.when(condition).into(),
-        (Either5::B(header), Either6::C(condition)) => header.when(condition).into(),
-        (Either5::B(header), Either6::D(condition)) => header.when(condition).into(),
-        (Either5::B(header), Either6::E(condition)) => header.when(condition).into(),
-        (Either5::B(header), Either6::F(condition)) => header.when(condition).into(),
+        (Either6::B(header), Either6::A(condition)) => header.when(condition).into(),
+        (Either6::B(header), Either6::B(condition)) => header.when(condition).into(),
+        (Either6::B(header), Either6::C(condition)) => header.when(condition).into(),
+        (Either6::B(header), Either6::D(condition)) => header.when(condition).into(),
+        (Either6::B(header), Either6::E(condition)) => header.when(condition).into(),
+        (Either6::B(header), Either6::F(condition)) => header.when(condition).into(),
 
-        (Either5::C(method), Either6::A(condition)) => method.when(condition).into(),
-        (Either5::C(method), Either6::B(condition)) => method.when(condition).into(),
-        (Either5::C(method), Either6::C(condition)) => method.when(condition).into(),
-        (Either5::C(method), Either6::D(condition)) => method.when(condition).into(),
-        (Either5::C(method), Either6::E(condition)) => method.when(condition).into(),
-        (Either5::C(method), Either6::F(condition)) => method.when(condition).into(),
+        (Either6::C(method), Either6::A(condition)) => method.when(condition).into(),
+        (Either6::C(method), Either6::B(condition)) => method.when(condition).into(),
+        (Either6::C(method), Either6::C(condition)) => method.when(condition).into(),
+        (Either6::C(method), Either6::D(condition)) => method.when(condition).into(),
+        (Either6::C(method), Either6::E(condition)) => method.when(condition).into(),
+        (Either6::C(method), Either6::F(condition)) => method.when(condition).into(),
 
-        (Either5::D(sequence), Either6::A(condition)) => sequence.when(condition).into(),
-        (Either5::D(sequence), Either6::B(condition)) => sequence.when(condition).into(),
-        (Either5::D(sequence), Either6::C(condition)) => sequence.when(condition).into(),
-        (Either5::D(sequence), Either6::D(condition)) => sequence.when(condition).into(),
-        (Either5::D(sequence), Either6::E(condition)) => sequence.when(condition).into(),
-        (Either5::D(sequence), Either6::F(condition)) => sequence.when(condition).into(),
+        (Either6::D(href), Either6::A(condition)) => href.when(condition).into(),
+        (Either6::D(href), Either6::B(condition)) => href.when(condition).into(),
+        (Either6::D(href), Either6::C(condition)) => href.when(condition).into(),
+        (Either6::D(href), Either6::D(condition)) => href.when(condition).into(),
+        (Either6::D(href), Either6::E(condition)) => href.when(condition).into(),
+        (Either6::D(href), Either6::F(condition)) => href.when(condition).into(),
 
-        (Either5::E(conditional), Either6::A(condition)) => conditional.when(condition).into(),
-        (Either5::E(conditional), Either6::B(condition)) => conditional.when(condition).into(),
-        (Either5::E(conditional), Either6::C(condition)) => conditional.when(condition).into(),
-        (Either5::E(conditional), Either6::D(condition)) => conditional.when(condition).into(),
-        (Either5::E(conditional), Either6::E(condition)) => conditional.when(condition).into(),
-        (Either5::E(conditional), Either6::F(condition)) => conditional.when(condition).into(),
+        (Either6::E(sequence), Either6::A(condition)) => sequence.when(condition).into(),
+        (Either6::E(sequence), Either6::B(condition)) => sequence.when(condition).into(),
+        (Either6::E(sequence), Either6::C(condition)) => sequence.when(condition).into(),
+        (Either6::E(sequence), Either6::D(condition)) => sequence.when(condition).into(),
+        (Either6::E(sequence), Either6::E(condition)) => sequence.when(condition).into(),
+        (Either6::E(sequence), Either6::F(condition)) => sequence.when(condition).into(),
+
+        (Either6::F(conditional), Either6::A(condition)) => conditional.when(condition).into(),
+        (Either6::F(conditional), Either6::B(condition)) => conditional.when(condition).into(),
+        (Either6::F(conditional), Either6::C(condition)) => conditional.when(condition).into(),
+        (Either6::F(conditional), Either6::D(condition)) => conditional.when(condition).into(),
+        (Either6::F(conditional), Either6::E(condition)) => conditional.when(condition).into(),
+        (Either6::F(conditional), Either6::F(condition)) => conditional.when(condition).into(),
     }
 }
