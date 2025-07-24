@@ -2,6 +2,7 @@ use std::ops::Deref;
 
 use ::napi::bindgen_prelude::{Either5, Either6};
 use ::napi::{Error, Result, Status};
+use napi::bindgen_prelude::ToNapiValue;
 use napi_derive::napi;
 
 use http_handler::napi::Request;
@@ -1753,6 +1754,35 @@ impl crate::Rewriter for Rewriter {
     }
 }
 
+use ::napi::bindgen_prelude::{ClassInstance, FromNapiValue};
+use ::napi::sys;
+
+impl FromNapiValue for Rewriter {
+    unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> Result<Self> {
+        // Try to convert from ClassInstance<Rewriter>
+        if let Ok(instance) = unsafe { ClassInstance::<Rewriter>::from_napi_value(env, value) } {
+            return Ok(Rewriter(instance.0.clone()));
+        }
+
+        // If that fails, try to convert from AnyRewriter
+        if let Ok(rewriter) = unsafe { AnyRewriter::from_napi_value(env, value) } {
+            return Ok(match rewriter {
+                Either5::A(PathRewriter(path)) => path.to_owned().into(),
+                Either5::B(HeaderRewriter(header)) => header.to_owned().into(),
+                Either5::C(MethodRewriter(method)) => method.to_owned().into(),
+                Either5::D(SequenceRewriter(sequence)) => sequence.to_owned().into(),
+                Either5::E(ConditionalRewriter(conditional)) => conditional.to_owned().into(),
+            });
+        }
+
+        // If both conversions fail, return an error
+        Err(Error::new(
+            Status::InvalidArg,
+            "Expected a Rewriter instance or any other type of rewriter",
+        ))
+    }
+}
+
 impl TryFrom<ConditionalRewriterConfig> for Rewriter {
     type Error = Error;
 
@@ -1845,7 +1875,7 @@ impl TryFrom<Vec<Rewriter>> for Rewriter {
         }
 
         // Reduce the rewriters into a single Rewriter sequence
-        Ok(rewriters.into_iter().reduce(then).unwrap().into())
+        Ok(rewriters.into_iter().reduce(then).unwrap())
     }
 }
 
