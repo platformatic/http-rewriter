@@ -100,7 +100,7 @@ dependencies = [
 [[package]]
 name = "http-handler"
 version = "1.0.0"
-source = "git+ssh://git@github.com/platformatic/http-handler#feb3f00b1f548c581608974ae228dac8c7125f94"
+source = "git+https://github.com/platformatic/http-handler#5a4f58c43dac33e4994918024766ec7d5ab7cc06"
 dependencies = [
  "async-trait",
  "bytes",

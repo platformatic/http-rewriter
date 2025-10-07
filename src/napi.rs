@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
-use ::napi::bindgen_prelude::{Either5, Either6};
+use ::napi::bindgen_prelude::Either6;
 use ::napi::{Error, Result, Status};
-use napi::bindgen_prelude::ToNapiValue;
 use napi_derive::napi;
 
 use http_handler::napi::Request;
