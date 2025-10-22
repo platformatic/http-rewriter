@@ -8,10 +8,10 @@ const docroot = fileURLToPath(new URL('.', import.meta.url))
 
 test('PathCondition', async () => {
   const matchingRequest = new Request({
-    uri: '/test/foo'
+    url: '/test/foo'
   })
   const notMatchingRequest = new Request({
-    uri: '/foo/bar'
+    url: '/foo/bar'
   })
 
   const pathCondition = new PathCondition('^/test')
@@ -23,13 +23,13 @@ test('PathCondition', async () => {
 
 test('HeaderCondition', async () => {
   const matchingRequest = new Request({
-    uri: '/test/foo',
+    url: '/test/foo',
     headers: {
       'X-Test-Header': 'test-value'
     }
   })
   const notMatchingRequest = new Request({
-    uri: '/foo/bar',
+    url: '/foo/bar',
     headers: {
       'X-Test-Header': 'other-value'
     }
@@ -44,11 +44,11 @@ test('HeaderCondition', async () => {
 
 test('MethodCondition', async () => {
   const matchingRequest = new Request({
-    uri: '/test/foo',
+    url: '/test/foo',
     method: 'GET'
   })
   const notMatchingRequest = new Request({
-    uri: '/foo/bar',
+    url: '/foo/bar',
     method: 'POST'
   })
 
@@ -61,11 +61,11 @@ test('MethodCondition', async () => {
 
 test('ExistenceCondition', async () => {
   const matchingRequest = new Request({
-    uri: '/condition.test.mjs',
+    url: '/condition.test.mjs',
     docroot
   })
   const notMatchingRequest = new Request({
-    uri: '/not-exists',
+    url: '/not-exists',
     docroot
   })
 
@@ -78,11 +78,11 @@ test('ExistenceCondition', async () => {
 
 test('NonExistenceCondition', async () => {
   const matchingRequest = new Request({
-    uri: '/not-exists',
+    url: '/not-exists',
     docroot
   })
   const notMatchingRequest = new Request({
-    uri: '/condition.test.mjs',
+    url: '/condition.test.mjs',
     docroot
   })
 
@@ -126,21 +126,21 @@ test('combinators', async () => {
 
   // Verify `and` condition matches when both conditions match
   ok(andCondition.matches(new Request({
-    uri: '/test/foo',
+    url: '/test/foo',
     headers: {
       'X-Test-Header': 'test-value'
     }
   })), 'should match when all conditions match')
 
   ok(!andCondition.matches(new Request({
-    uri: '/test/foo',
+    url: '/test/foo',
     headers: {
       'X-Test-Header': 'other-value'
     }
   })), 'should not match when one condition does not match')
 
   ok(!andCondition.matches(new Request({
-    uri: '/foo/bar',
+    url: '/foo/bar',
     headers: {
       'X-Test-Header': 'test-value'
     }
@@ -148,28 +148,28 @@ test('combinators', async () => {
 
   // Verify `or` condition matches if either condition matches
   ok(orCondition.matches(new Request({
-    uri: '/test/foo',
+    url: '/test/foo',
     headers: {
       'X-Test-Header': 'test-value'
     }
   })), 'should match when either condition matches')
 
   ok(orCondition.matches(new Request({
-    uri: '/foo/bar',
+    url: '/foo/bar',
     headers: {
       'X-Test-Header': 'test-value'
     }
   })), 'should match when path condition matches even if header does not')
 
   ok(orCondition.matches(new Request({
-    uri: '/test/bar',
+    url: '/test/bar',
     headers: {
       'X-Test-Header': 'other-value'
     }
   })), 'should match when header condition matches even if path does not')
 
   ok(!orCondition.matches(new Request({
-    uri: '/foo/bar',
+    url: '/foo/bar',
     headers: {
       'X-Test-Header': 'other-value'
     }

@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use ::napi::bindgen_prelude::Either6;
 use ::napi::{Error, Result, Status};
 use napi_derive::napi;
@@ -11,6 +9,24 @@ use http_handler::napi::Request;
 //
 
 use crate::{Condition as ConditionTrait, ConditionExt};
+
+/// Helper function to prepare a request with an optional docroot.
+///
+/// If a docroot is provided, it sets it on the request before returning the inner request.
+/// This allows backwards compatibility where docroot can be passed as a second parameter.
+fn prepare_request_with_docroot(
+    request: Request,
+    docroot: Option<String>,
+) -> Result<http_handler::Request> {
+    let mut inner = request.into_inner();
+
+    if let Some(docroot) = docroot {
+        use http_handler::RequestExt;
+        inner.set_document_root(docroot.into());
+    }
+
+    Ok(inner)
+}
 
 /// A N-API wrapper for the `PathCondition` type.
 #[napi]
@@ -43,7 +59,7 @@ impl PathCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -78,7 +94,7 @@ impl HeaderCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -113,7 +129,7 @@ impl MethodCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -145,7 +161,7 @@ impl ExistenceCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: &Request) -> Result<bool> {
-        Ok(self.0.matches(request))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -177,7 +193,7 @@ impl NonExistenceCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: &Request) -> Result<bool> {
-        Ok(self.0.matches(request))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -495,7 +511,7 @@ impl GroupCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -647,11 +663,13 @@ impl TryFrom<ConditionConfig> for Condition {
                 Ok(method_condition.into())
             }
             ConditionType::Exists => {
-                let existence_condition = crate::ExistenceCondition::new();
+                let existence_condition = crate::ExistenceCondition::try_from(config)
+                    .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
                 Ok(existence_condition.into())
             }
             ConditionType::NotExists => {
-                let nonexistence_condition = crate::NonExistenceCondition::new();
+                let nonexistence_condition = crate::NonExistenceCondition::try_from(config)
+                    .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
                 Ok(nonexistence_condition.into())
             }
         }
@@ -794,10 +812,10 @@ impl PathRewriter {
     /// const rewritten = rewriter.rewrite('/path/to/resource');
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -834,10 +852,10 @@ impl HeaderRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -874,10 +892,10 @@ impl MethodRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -914,10 +932,10 @@ impl HrefRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1023,10 +1041,7 @@ impl crate::Rewriter for SequenceRewriterType {
             SequenceRewriterType::Conditional_Method(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Href(r) => r.rewrite(request),
             SequenceRewriterType::Conditional_Sequence(r) => r.rewrite(request),
-            SequenceRewriterType::Conditional_Conditional(r) => {
-                println!("yep: {:#?}", r);
-                r.rewrite(request)
-            }
+            SequenceRewriterType::Conditional_Conditional(r) => r.rewrite(request)
         }
     }
 }
@@ -1153,10 +1168,10 @@ impl SequenceRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1412,10 +1427,10 @@ impl ConditionalRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1882,11 +1897,13 @@ impl Rewriter {
     ///
     /// ```js
     /// const rewritten = rewriter.rewrite(request);
+    /// // Or with explicit docroot:
+    /// const rewritten = rewriter.rewrite(request, '/var/www/html');
     /// ```
     #[napi(js_name = "rewrite")]
-    pub fn js_rewrite(&self, request: Request) -> Result<Request> {
+    pub fn js_rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
-            .rewrite(request.deref().to_owned())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())

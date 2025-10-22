@@ -215,11 +215,24 @@ impl Rewriter for PathRewriter {
         let new_path = self.pattern.replace(&path, &self.replacement);
 
         if new_path != path {
-            // Build new URI with the new path
-            let uri_str = if let Some(query) = parts.uri.query() {
-                format!("{new_path}?{query}")
+            // Build new URI preserving scheme and authority if present
+            // This ensures backwards compatibility with full URLs while supporting relative URIs
+            let uri_str = if let (Some(scheme), Some(authority)) =
+                (parts.uri.scheme(), parts.uri.authority())
+            {
+                // Full URI - preserve scheme and authority
+                if let Some(query) = parts.uri.query() {
+                    format!("{scheme}://{authority}{new_path}?{query}")
+                } else {
+                    format!("{scheme}://{authority}{new_path}")
+                }
             } else {
-                new_path.to_string()
+                // Relative URI - just use path
+                if let Some(query) = parts.uri.query() {
+                    format!("{new_path}?{query}")
+                } else {
+                    new_path.to_string()
+                }
             };
 
             parts.uri = uri_str
@@ -522,13 +535,38 @@ impl Rewriter for HrefRewriter {
     fn rewrite<B>(&self, request: Request<B>) -> Result<Request<B>, RewriteError> {
         let (mut parts, body) = request.into_parts();
 
-        let uri_str = parts.uri.to_string();
-        let new_uri_str = self.pattern.replace(&uri_str, &self.replacement);
+        // Use the path and query for pattern matching
+        // This matches against just the path portion of the URI
+        let input = parts
+            .uri
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/")
+            .to_string();
 
-        if new_uri_str != uri_str {
-            parts.uri = new_uri_str
+        let replaced = self.pattern.replace(&input, &self.replacement);
+        if replaced != input {
+            // Parse the result URI
+            let new_uri: http::Uri = replaced
+                .as_ref()
                 .parse()
-                .map_err(|_| RewriteError("Invalid URI after rewrite".to_string()))?;
+                .map_err(|_| RewriteError("Invalid URI after href rewrite".to_string()))?;
+
+            // If the result doesn't have a scheme/authority but the original did,
+            // preserve the original scheme and authority
+            let final_uri = if new_uri.scheme().is_none() && parts.uri.scheme().is_some() {
+                let scheme = parts.uri.scheme().unwrap();
+                let authority = parts.uri.authority().unwrap();
+                format!("{scheme}://{authority}{new_uri}")
+                    .parse()
+                    .map_err(|_| {
+                        RewriteError("Invalid URI after preserving scheme/authority".to_string())
+                    })?
+            } else {
+                new_uri
+            };
+
+            parts.uri = final_uri;
         }
 
         Ok(Request::from_parts(parts, body))
