@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use ::napi::bindgen_prelude::Either6;
 use ::napi::{Error, Result, Status};
 use napi_derive::napi;
@@ -43,7 +41,7 @@ impl PathCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -78,7 +76,7 @@ impl HeaderCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -113,7 +111,7 @@ impl MethodCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -145,7 +143,7 @@ impl ExistenceCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: &Request) -> Result<bool> {
-        Ok(self.0.matches(request))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -177,7 +175,7 @@ impl NonExistenceCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: &Request) -> Result<bool> {
-        Ok(self.0.matches(request))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -495,7 +493,7 @@ impl GroupCondition {
     /// ```
     #[napi]
     pub fn matches(&self, request: Request) -> Result<bool> {
-        Ok(self.0.matches(request.deref()))
+        Ok(self.0.matches(&request))
     }
 }
 
@@ -797,7 +795,7 @@ impl PathRewriter {
     pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(request.into_inner())
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -837,7 +835,7 @@ impl HeaderRewriter {
     pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(request.into_inner())
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -877,7 +875,7 @@ impl MethodRewriter {
     pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(request.into_inner())
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -917,7 +915,7 @@ impl HrefRewriter {
     pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(request.into_inner())
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1156,7 +1154,7 @@ impl SequenceRewriter {
     pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(request.into_inner())
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1415,7 +1413,7 @@ impl ConditionalRewriter {
     pub fn rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.deref().to_owned())
+            .rewrite(request.into_inner())
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1886,7 +1884,7 @@ impl Rewriter {
     #[napi(js_name = "rewrite")]
     pub fn js_rewrite(&self, request: Request) -> Result<Request> {
         let rewritten = self
-            .rewrite(request.deref().to_owned())
+            .rewrite(request.into_inner())
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
