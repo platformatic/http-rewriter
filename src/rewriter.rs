@@ -535,9 +535,14 @@ impl Rewriter for HrefRewriter {
     fn rewrite<B>(&self, request: Request<B>) -> Result<Request<B>, RewriteError> {
         let (mut parts, body) = request.into_parts();
 
-        // Use the full URI for pattern matching
-        // This allows patterns to match both full URLs and path-only URIs
-        let input = parts.uri.to_string();
+        // Use the path and query for pattern matching
+        // This matches against just the path portion of the URI
+        let input = parts
+            .uri
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/")
+            .to_string();
 
         let replaced = self.pattern.replace(&input, &self.replacement);
         if replaced != input {
