@@ -440,11 +440,13 @@ impl Rewriter for HeaderRewriter {
     }
 }
 
-/// Rewriter that transforms the entire URI (href) using regex pattern and replacement
+/// Rewriter that transforms the path and query of a URI using regex pattern and replacement
 ///
-/// Unlike [`PathRewriter`] which only modifies the path component, this rewriter
-/// can transform the entire URI including the scheme, authority, path, and query.
-/// This is useful for redirecting between domains or changing protocols.
+/// This rewriter matches against the path and query portion of the URI (not the scheme
+/// or authority). The pattern is applied to the result of `uri.path_and_query()`.
+/// This makes patterns simpler and more intuitive for path-based routing.
+///
+/// The scheme and authority from the original request are preserved in the rewritten URI.
 ///
 /// # Examples
 ///
@@ -452,35 +454,35 @@ impl Rewriter for HeaderRewriter {
 /// use http_rewriter::{Rewriter, HrefRewriter};
 /// use http::Request;
 ///
-/// // Redirect from HTTP to HTTPS
-/// let rewriter = HrefRewriter::new("^http://", "https://").unwrap();
+/// // Rewrite paths to add a route parameter
+/// let rewriter = HrefRewriter::new("^(.*)$", "/index.php?route=$1").unwrap();
 ///
 /// let request = Request::builder()
-///     .uri("http://example.com/api/users")
+///     .uri("http://example.com/foo/bar")
 ///     .body(())
 ///     .unwrap();
 ///
 /// let result = rewriter.rewrite(request).unwrap();
-/// assert_eq!(result.uri().to_string(), "https://example.com/api/users");
+/// assert_eq!(result.uri().to_string(), "http://example.com/index.php?route=/foo/bar");
 /// ```
 ///
 /// ```
 /// use http_rewriter::{Rewriter, HrefRewriter};
 /// use http::Request;
 ///
-/// // Redirect to a different domain
+/// // Rewrite API paths with query string preservation
 /// let rewriter = HrefRewriter::new(
-///     r"^https://old\.example\.com/(.*)$",
-///     "https://new.example.com/$1"
+///     r"^/api/v1/(.*)$",
+///     "/api/v2/$1"
 /// ).unwrap();
 ///
 /// let request = Request::builder()
-///     .uri("https://old.example.com/api/v1/users?page=2")
+///     .uri("https://example.com/api/v1/users?page=2")
 ///     .body(())
 ///     .unwrap();
 ///
 /// let result = rewriter.rewrite(request).unwrap();
-/// assert_eq!(result.uri().to_string(), "https://new.example.com/api/v1/users?page=2");
+/// assert_eq!(result.uri().to_string(), "https://example.com/api/v2/users?page=2");
 /// ```
 #[derive(Debug, Clone)]
 pub struct HrefRewriter {
@@ -493,7 +495,7 @@ impl HrefRewriter {
     ///
     /// # Arguments
     ///
-    /// * `pattern` - Regular expression pattern to match against the full URI
+    /// * `pattern` - Regular expression pattern to match against the path and query portion of the URI
     /// * `replacement` - Replacement string, can include capture group references like $1, $2
     ///
     /// # Errors
@@ -505,19 +507,19 @@ impl HrefRewriter {
     /// ```
     /// use http_rewriter::HrefRewriter;
     ///
-    /// // Change protocol
-    /// let rewriter = HrefRewriter::new("^http://", "https://").unwrap();
+    /// // Add routing prefix
+    /// let rewriter = HrefRewriter::new("^(.*)$", "/index.php?route=$1").unwrap();
     ///
-    /// // Redirect between domains with path preservation
+    /// // Rewrite API version in path
     /// let rewriter = HrefRewriter::new(
-    ///     r"^https://api\.old\.com/(.*)$",
-    ///     "https://api.new.com/$1"
+    ///     r"^/api/v1/(.*)$",
+    ///     "/api/v2/$1"
     /// ).unwrap();
     ///
-    /// // Add subdomain
+    /// // Add path prefix
     /// let rewriter = HrefRewriter::new(
-    ///     r"^https://example\.com/",
-    ///     "https://www.example.com/"
+    ///     r"^/(.*)$",
+    ///     "/app/$1"
     /// ).unwrap();
     /// ```
     pub fn new(
@@ -535,9 +537,14 @@ impl Rewriter for HrefRewriter {
     fn rewrite<B>(&self, request: Request<B>) -> Result<Request<B>, RewriteError> {
         let (mut parts, body) = request.into_parts();
 
-        // Use the full URI for pattern matching
-        // This allows patterns to match both full URLs and path-only URIs
-        let input = parts.uri.to_string();
+        // Use the path and query for pattern matching
+        // This matches against just the path portion of the URI
+        let input = parts
+            .uri
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/")
+            .to_string();
 
         let replaced = self.pattern.replace(&input, &self.replacement);
         if replaced != input {
