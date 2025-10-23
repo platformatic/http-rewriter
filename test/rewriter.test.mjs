@@ -1,4 +1,4 @@
-import { Request, PathRewriter, HeaderRewriter, MethodRewriter, HeaderCondition, MethodCondition, SequenceRewriter, ConditionalRewriter, Rewriter } from '../index.js'
+import { Request, PathRewriter, HeaderRewriter, MethodRewriter, HrefRewriter, HeaderCondition, MethodCondition, SequenceRewriter, ConditionalRewriter, Rewriter } from '../index.js'
 
 import { ok, strictEqual } from 'node:assert/strict'
 import { test } from 'node:test'
@@ -50,6 +50,33 @@ test('MethodRewriter', async () => {
 
   ok(rewritten instanceof Request, 'should return a Request instance')
   strictEqual(rewritten.method, 'GET', 'should rewrite the method correctly')
+})
+
+test('HrefRewriter', async () => {
+  const request = new Request({
+    url: 'http://example.com/foo/bar'
+  })
+
+  // HrefRewriter matches against path and query only, not the full URL
+  const hrefRewriter = new HrefRewriter('^(.*)$', '/index.php?route=$1')
+
+  const rewritten = hrefRewriter.rewrite(request)
+
+  ok(rewritten instanceof Request, 'should return a Request instance')
+  strictEqual(rewritten.url, 'http://example.com/index.php?route=/foo/bar', 'should rewrite the path correctly')
+})
+
+test('HrefRewriter preserves query string', async () => {
+  const request = new Request({
+    url: 'http://example.com/api/users?page=2'
+  })
+
+  const hrefRewriter = new HrefRewriter('^/api/(.*)$', '/v2/$1')
+
+  const rewritten = hrefRewriter.rewrite(request)
+
+  ok(rewritten instanceof Request, 'should return a Request instance')
+  strictEqual(rewritten.url, 'http://example.com/v2/users?page=2', 'should preserve query string')
 })
 
 test('chaining rewriters with then()', async () => {
