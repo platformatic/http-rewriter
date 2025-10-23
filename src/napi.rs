@@ -10,6 +10,24 @@ use http_handler::napi::Request;
 
 use crate::{Condition as ConditionTrait, ConditionExt};
 
+/// Helper function to prepare a request with an optional docroot.
+///
+/// If a docroot is provided, it sets it on the request before returning the inner request.
+/// This allows backwards compatibility where docroot can be passed as a second parameter.
+fn prepare_request_with_docroot(
+    request: Request,
+    docroot: Option<String>,
+) -> Result<http_handler::Request> {
+    let mut inner = request.into_inner();
+
+    if let Some(docroot) = docroot {
+        use http_handler::RequestExt;
+        inner.set_document_root(docroot.into());
+    }
+
+    Ok(inner)
+}
+
 /// A N-API wrapper for the `PathCondition` type.
 #[napi]
 #[derive(Clone, Debug)]
@@ -792,10 +810,10 @@ impl PathRewriter {
     /// const rewritten = rewriter.rewrite('/path/to/resource');
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.into_inner())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -832,10 +850,10 @@ impl HeaderRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.into_inner())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -872,10 +890,10 @@ impl MethodRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.into_inner())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -912,10 +930,10 @@ impl HrefRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.into_inner())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1151,10 +1169,10 @@ impl SequenceRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.into_inner())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1410,10 +1428,10 @@ impl ConditionalRewriter {
     /// const rewritten = rewriter.rewrite(request);
     /// ```
     #[napi]
-    pub fn rewrite(&self, request: Request) -> Result<Request> {
+    pub fn rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
             .0
-            .rewrite(request.into_inner())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
@@ -1880,11 +1898,13 @@ impl Rewriter {
     ///
     /// ```js
     /// const rewritten = rewriter.rewrite(request);
+    /// // Or with explicit docroot:
+    /// const rewritten = rewriter.rewrite(request, '/var/www/html');
     /// ```
     #[napi(js_name = "rewrite")]
-    pub fn js_rewrite(&self, request: Request) -> Result<Request> {
+    pub fn js_rewrite(&self, request: Request, docroot: Option<String>) -> Result<Request> {
         let rewritten = self
-            .rewrite(request.into_inner())
+            .rewrite(prepare_request_with_docroot(request, docroot)?)
             .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
 
         Ok(rewritten.into())
