@@ -735,8 +735,8 @@ packages:
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
 
-  es-toolkit@1.41.0:
-    resolution: {integrity: sha512-bDd3oRmbVgqZCJS6WmeQieOrzpl3URcWBUVDXxOELlUW2FuW+0glPOz1n0KnRie+PdyvUZcXz2sOn00c6pPRIA==}
+  es-toolkit@1.42.0:
+    resolution: {integrity: sha512-SLHIyY7VfDJBM8clz4+T2oquwTQxEzu263AyhVK4jREOAwJ+8eebaa4wM3nlvnAqhDrMm2EsA6hWHaQsMPQ1nA==}
 
   fast-content-type-parse@3.0.0:
     resolution: {integrity: sha512-ZvLdcY8P+N8mGQJahJV5G4U88CSvT1rP8ApL6uETe88MBXrBHAkZlSEySdUlyztF7ccb+Znos3TFqaepHxdhBg==}
@@ -931,7 +931,7 @@ snapshots:
       colorette: 2.0.20
       debug: 4.4.3
       emnapi: 1.7.1
-      es-toolkit: 1.41.0
+      es-toolkit: 1.42.0
       js-yaml: 4.1.1
       semver: 7.7.3
       typanion: 3.14.0
@@ -1366,7 +1366,7 @@ snapshots:
 
   emoji-regex@8.0.0: {}
 
-  es-toolkit@1.41.0: {}
+  es-toolkit@1.42.0: {}
 
   fast-content-type-parse@3.0.0: {}
 
