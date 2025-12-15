@@ -194,7 +194,7 @@ dependencies = [
 [[package]]
 name = "http-handler"
 version = "1.0.0"
-source = "git+https://github.com/platformatic/http-handler#3e685693556f63145ed122d0a2faabc81da1ae40"
+source = "git+https://github.com/platformatic/http-handler#4797b91d6f0a3f2b09d22b3b28ef30bf755596e3"
 dependencies = [
  "bytes",
  "futures-core",
