@@ -194,7 +194,7 @@ dependencies = [
 [[package]]
 name = "http-handler"
 version = "1.0.0"
-source = "git+https://github.com/platformatic/http-handler#4797b91d6f0a3f2b09d22b3b28ef30bf755596e3"
+source = "git+https://github.com/platformatic/http-handler#43d37c47997467e5f218a191fcbf97ba41082ab4"
 dependencies = [
  "bytes",
  "futures-core",
@@ -223,9 +223,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.15"
+version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
+checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "libloading"
@@ -321,9 +321,9 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.103"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ee95bc4ef87b8d5ba32e8b7714ccc834865276eab0aed5c9958d00ec45f49e8"
+checksum = "9695f8df41bb4f3d222c95a67532365f569318332d03d5f3f67f37b20e6ebdf0"
 dependencies = [
  "unicode-ident",
 ]
