@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@napi-rs/cli':
-        specifier: 3.6.1
-        version: 3.6.1(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)
+        specifier: 3.6.2
+        version: 3.6.2(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)
       '@oxc-node/core':
         specifier: ^0.1.0
         version: 0.1.0
@@ -163,8 +163,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@napi-rs/cli@3.6.1':
-    resolution: {integrity: sha512-xOrDmCdtXfJ2XzknJAyEAMUe4SHT02PHY3JG8/vXFAB+EPF7Pgv0q182Vmw2zAlhAvnfofccvJlHrZpNPDbypA==}
+  '@napi-rs/cli@3.6.2':
+    resolution: {integrity: sha512-jy5rABUh9tbE/vPRzw9kGzGuqZiVslyDQUV8LkvjzqVX/oJMN7g0U1uhtr9L3W1H+iRM/urXHXUf+CE4n8FvLA==}
     engines: {node: '>= 16'}
     hasBin: true
     peerDependencies:
@@ -922,7 +922,7 @@ snapshots:
 
   '@inquirer/type@4.0.5': {}
 
-  '@napi-rs/cli@3.6.1(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)':
+  '@napi-rs/cli@3.6.2(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)':
     dependencies:
       '@inquirer/prompts': 8.4.1
       '@napi-rs/cross-toolchain': 1.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)
