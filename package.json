@@ -18,7 +18,7 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@napi-rs/cli": "3.9.1",
+    "@napi-rs/cli": "3.10.4",
     "@oxc-node/core": "^0.1.0",
     "oxlint": "^0.18.0"
   },
